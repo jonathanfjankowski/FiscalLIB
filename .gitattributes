@@ -1,0 +1,11 @@
+# Arquivos de desenvolvimento fora do pacote distribuído
+/.gitattributes export-ignore
+/.github export-ignore
+/tests export-ignore
+/examples export-ignore
+/docs export-ignore
+/phpunit.xml.dist export-ignore
+/phpstan.neon export-ignore
+/config export-ignore
+*.md export-ignore
+LICENSE export-ignore
