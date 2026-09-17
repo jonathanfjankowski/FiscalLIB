@@ -13,6 +13,7 @@ use FiscalLib\Common\Enums\ModeloDocumento;
 use FiscalLib\Common\Enums\TipoOperacao;
 use FiscalLib\Common\Matematica;
 use FiscalLib\Common\ValueObjects\CodigoCfop;
+use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Common\ValueObjects\ChaveAcesso;
 use FiscalLib\Documento\Destinatario;
 use FiscalLib\Documento\Emitente;
@@ -42,6 +43,8 @@ class NfeBuilder
     protected FinalidadeNfe $finalidade = FinalidadeNfe::Normal;
     protected TipoOperacao $tipoOperacao = TipoOperacao::Saida;
     protected ?IndicadorPresenca $indicadorPresenca = null;
+    protected ?int $indicadorIntermediador = null;
+    protected ?string $cnpjIntermediador = null;
     protected IndicadorConsumidorFinal $consumidorFinal = IndicadorConsumidorFinal::Sim;
     protected ?Emitente $emitente = null;
     protected ?Destinatario $destinatario = null;
@@ -109,6 +112,32 @@ class NfeBuilder
     public function indicadorPresenca(IndicadorPresenca $indicadorPresenca): static
     {
         $this->indicadorPresenca = $indicadorPresenca;
+
+        return $this;
+    }
+
+    /**
+     * Indicador de intermediador/marketplace (NT 2020.006 — indIntermed, só NF-e 55).
+     * 0 = operação sem intermediador (default da FiscalAPI); 1 = operação em site ou
+     * plataforma de terceiros — nesse caso o CNPJ do intermediador é obrigatório.
+     */
+    public function intermediador(int $indicador, ?string $cnpj = null): static
+    {
+        if ($indicador !== 0 && $indicador !== 1) {
+            throw new \FiscalLib\Exceptions\ValidationException('Indicador de intermediador inválido.', [
+                'indicadorIntermediador' => ["Use 0 (sem intermediador) ou 1 (plataforma de terceiros); recebido {$indicador}."],
+            ]);
+        }
+        if ($cnpj !== null) {
+            $cnpj = Cnpj::criar($cnpj)->valor();
+        }
+        if ($indicador === 1 && $cnpj === null) {
+            throw new \FiscalLib\Exceptions\ValidationException('Intermediador exige CNPJ.', [
+                'cnpjIntermediador' => ['indicadorIntermediador = 1 exige o CNPJ do intermediador.'],
+            ]);
+        }
+        $this->indicadorIntermediador = $indicador;
+        $this->cnpjIntermediador = $cnpj;
 
         return $this;
     }
@@ -266,6 +295,8 @@ class NfeBuilder
             pagamentos: $this->pagamentos,
             nfesReferenciadas: $this->nfesReferenciadas,
             informacoesComplementares: $this->informacoesComplementares,
+            indicadorIntermediador: $this->indicadorIntermediador,
+            cnpjIntermediador: $this->cnpjIntermediador,
         );
     }
 

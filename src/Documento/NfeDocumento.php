@@ -38,6 +38,8 @@ final class NfeDocumento
         public readonly array $pagamentos = [],
         public readonly array $nfesReferenciadas = [],
         public readonly ?string $informacoesComplementares = null, // ignorado pela FiscalAPI; útil p/ outros emissores
+        public readonly ?int $indicadorIntermediador = null,  // NT 2020.006 (indIntermed): 0=sem intermediador, 1=plataforma de terceiros — só NF-e (55)
+        public readonly ?string $cnpjIntermediador = null,    // obrigatório quando indicadorIntermediador = 1
     ) {
     }
 }

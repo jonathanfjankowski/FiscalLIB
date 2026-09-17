@@ -5,3 +5,4 @@ parameters:
         - tests
     excludePaths:
         - src/Laravel
+        - tests/E2E

@@ -30,6 +30,33 @@ quando a rejeição técnica é ativada.
 ## [Não lançada]
 
 ### Adicionado
+- `NfeBuilder::intermediador(int $indicador, ?string $cnpj = null)` — suporte
+  ao marketplace/intermediador (NT 2020.006, `indIntermed`, só NF-e 55; 0 =
+  sem intermediador, 1 = plataforma de terceiros com CNPJ obrigatório). O
+  adaptador serializa `indicadorIntermediador`/`cnpjIntermediador` no payload
+  → grupo `infIntermed`. Sem o campo a SEFAZ-PR rejeita a NF-e com 434.
+- 4 testes novos (builder + mapeamento do intermediador) — 88 no total.
+
+### Alterado
+- **Suíte de integração (`SandboxE2eTest`) alinhada à homologação real
+  SEFAZ-PR** (validada de ponta a ponta contra a FiscalAPI com cert A1):
+  tenant usa o CNPJ do certificado (parametrizável via `FISCAL_TENANT_CNPJ`,
+  a 213 exige CNPJ-base igual), endereços completos com `nomeMunicipio`,
+  item com a descrição obrigatória de homologação + NCM real (778),
+  destinatário PJ com IE válida (805), alíquota interestadual 12% + CFOP
+  6102 (521/693), PIS/COFINS (745) e IBS/CBS com as alíquotas de teste 2026
+  — IBS UF 0,1% / CBS 0,9% (1026). NF-e e NFC-e progridem até a rejeição
+  230 (IE do emitente não cadastrada, pendência cadastral em resolução).
+- `phpstan.neon` exclui `tests/E2E` (scripts manuais de diagnóstico, fora da
+  suíte).
+- Novos scripts de suporte em `tests/E2E/`: `bootstrap-cert.php` (tenant +
+  api-key + certificado A1), `set-perfil.php` (perfil fiscal do emitente),
+  `diag-emitir.php`/`diag-nfce.php`/`diag-modelos.php` (emissão dirigida com
+  motivoStatus terminal).
+
+## [Não lançada] — docs e worker
+
+### Adicionado
 - Guia de integração: seção 9.6 "Octane / FrankenPHP (worker mode)" — o que é seguro,
   proibição de polling bloqueante em request HTTP, caveat do singleton capturando
   config por worker e receita multi-tenant.

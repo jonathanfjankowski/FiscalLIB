@@ -77,6 +77,13 @@ final class MapeadorDocumento
             $request['nfesReferenciadas'] = $referenciadas;
         }
 
+        if ($documento->indicadorIntermediador !== null) {
+            $request['indicadorIntermediador'] = $documento->indicadorIntermediador;
+            if ($documento->cnpjIntermediador !== null) {
+                $request['cnpjIntermediador'] = $documento->cnpjIntermediador;
+            }
+        }
+
         return $request;
     }
 

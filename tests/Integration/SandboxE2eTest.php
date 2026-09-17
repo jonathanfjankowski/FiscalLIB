@@ -22,6 +22,7 @@ use FiscalLib\Documento\Tomador;
 use FiscalLib\Exceptions\EstadoInvalidoException;
 use FiscalLib\Exceptions\ValidacaoApiException;
 use FiscalLib\FiscalLib;
+use FiscalLib\Tax\Contextos\IbsCbsEntrada;
 use FiscalLib\Tax\Contextos\NfeTaxContext;
 use FiscalLib\Tax\Contextos\NfseTaxContext;
 use PHPUnit\Framework\TestCase;
@@ -42,15 +43,20 @@ use PHPUnit\Framework\TestCase;
 final class SandboxE2eTest extends TestCase
 {
     private const BASE_URL = 'http://localhost:8080';
-    private const CNPJ_TENANT = '11444777000161';
+    /** CNPJ do emitente — deve ter o MESMO CNPJ-base do certificado A1 do tenant
+     * (senão a SEFAZ rejeita com 213 antes de qualquer outra validação).
+     * Override: FISCAL_TENANT_CNPJ. */
+    private const CNPJ_TENANT_PADRAO = '66194301000101';
 
     private static FiscalLib $lib;
     private static string $apiKey;
+    private static string $cnpjTenant;
 
     public static function setUpBeforeClass(): void
     {
         $base = getenv('FISCAL_BASE_URL') ?: self::BASE_URL;
         $adminSenha = getenv('ADMIN_PASSWORD');
+        self::$cnpjTenant = getenv('FISCAL_TENANT_CNPJ') ?: self::CNPJ_TENANT_PADRAO;
 
         $pronto = false;
         $ch = curl_init($base . '/health/ready');
@@ -85,23 +91,23 @@ final class SandboxE2eTest extends TestCase
 
         // Tenant é idempotente por CNPJ (409 → busca na lista).
         [$resp, $status] = self::httpPost($base . '/v1/admin/tenants', [
-            'cnpj' => self::CNPJ_TENANT,
-            'razaoSocial' => 'Empresa Integracao PHPUnit',
+            'cnpj' => self::$cnpjTenant,
+            'razaoSocial' => 'OKTO SISTEMAS INOVA SIMPLES I',
             'uf' => 'PR',
-            'codigoMunicipioIbge' => '4106902',
+            'codigoMunicipioIbge' => '4110706',
             'regimeTributario' => 3,
             'ambientePadrao' => 'homologacao',
             'logradouro' => 'Avenida Teste',
             'numero' => '100',
             'bairro' => 'Centro',
-            'cep' => '80000000',
-            'nomeMunicipio' => 'Curitiba',
+            'cep' => '84500000',
+            'nomeMunicipio' => 'Irati',
         ], $token);
 
         if ($status === 409) {
             $lista = self::httpGet($base . '/v1/admin/tenants', $token);
             foreach ($lista as $t) {
-                if (($t['cnpj'] ?? null) === self::CNPJ_TENANT) {
+                if (($t['cnpj'] ?? null) === self::$cnpjTenant) {
                     $resp = $t['id'];
                     break;
                 }
@@ -128,7 +134,7 @@ final class SandboxE2eTest extends TestCase
         );
         $documento = self::$lib->nfce()->novo()
             ->naturezaOperacao('Venda balcao integracao')
-            ->addItem(self::item(1, 25.50, $tributos, '5102'))
+            ->addItem(self::item(1, 25.50, $tributos, '5102')) // NFC-e é sempre operação interna
             ->pagamento('01', 25.50)
             ->build();
 
@@ -154,17 +160,17 @@ final class SandboxE2eTest extends TestCase
     public function testNfeCompletaTotaisV2PdfECancelamento(): void
     {
         $tributos = self::$lib->taxEngine()->calcularNfe(
-            NfeTaxContext::make()->valores(3, 40)->icms(0, cst: '00', aliquota: 18, fcp: 2)
+            NfeTaxContext::make()->valores(3, 40)->icms(0, cst: '00', aliquota: 12, fcp: 2)
                 ->ipi('50', aliquota: 5)
-                ->pis('01', '1.65')->cofins('01', '7.60')
+                ->pis('01', '1.65')->cofins('01', '7.60')->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
         );
         $documento = self::$lib->nfe()->novo()
             ->naturezaOperacao('Venda de mercadoria integracao')
             ->destinatario(new Destinatario(
                 Cnpj::criar('45997418000153'),
-                'Comprador Integracao LTDA',
-                inscricaoEstadual: 'ISENTO',
-                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP'),
+                'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL',
+                inscricaoEstadual: '110042490114',
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
             ))
             ->addItem(self::item(3, 40, $tributos, '6102'))
             ->frete(15)
@@ -223,7 +229,7 @@ final class SandboxE2eTest extends TestCase
             ->tomador(new Tomador(
                 Cnpj::criar('45997418000153'),
                 'Tomador Integracao LTDA',
-                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308'),
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
             ))
             ->servico(new ServicoFiscal('010701', 'Desenvolvimento de software integracao', codigoNbs: '112011000'))
             ->tributos($tributos)
@@ -281,13 +287,18 @@ final class SandboxE2eTest extends TestCase
     private static function nfeSimples(): NfeDocumento
     {
         $tributos = self::$lib->taxEngine()->calcularNfe(
-            NfeTaxContext::make()->valores(1, 100)->icms(0, cst: '00', aliquota: 18)
+            NfeTaxContext::make()->valores(1, 100)->icms(0, cst: '00', aliquota: 12)->pis('01', '1.65')->cofins('01', '7.60')->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
         );
 
         return self::$lib->nfe()->novo()
             ->naturezaOperacao('Venda de mercadoria integracao')
-            ->destinatario(new Destinatario(Cnpj::criar('45997418000153'), 'Comprador Integracao LTDA'))
-            ->addItem(self::item(1, 100, $tributos, '5102'))
+            ->destinatario(new Destinatario(
+                Cnpj::criar('45997418000153'),
+                'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL',
+                inscricaoEstadual: '110042490114',
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+            ))
+            ->addItem(self::item(1, 100, $tributos, '6102'))
             ->pagamento('01', 100)
             ->build();
     }
@@ -301,7 +312,7 @@ final class SandboxE2eTest extends TestCase
             valorUnitario: number_format($unit, 2, '.', ''),
             valorTotal: number_format($qtd * $unit, 2, '.', ''),
             tributos: $tributos,
-            ncm: '12345678',
+            ncm: '84714900',
             cfop: $cfop,
         );
     }

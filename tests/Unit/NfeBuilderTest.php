@@ -53,6 +53,51 @@ final class NfeBuilderTest extends TestCase
         self::assertSame(100.0, (float) $doc->totais->valorNota);
         self::assertSame('100.00', $doc->totais->valorProdutos);
         self::assertCount(1, $doc->itens);
+        self::assertNull($doc->indicadorIntermediador);
+    }
+
+    public function testIntermediadorMarketplace(): void
+    {
+        $doc = NfeBuilder::nfe()
+            ->ambiente(Ambiente::Homologacao)
+            ->serie(1)
+            ->naturezaOperacao('Venda via marketplace')
+            ->intermediador(1, '45.997.418/0001-53')
+            ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
+            ->addItem($this->item(tributos: $this->icms00()))
+            ->pagamento('01', 100)
+            ->build();
+
+        self::assertSame(1, $doc->indicadorIntermediador);
+        self::assertSame('45997418000153', $doc->cnpjIntermediador);
+    }
+
+    public function testIntermediadorSemIndicadorNaoSerializa(): void
+    {
+        $doc = NfeBuilder::nfe()
+            ->ambiente(Ambiente::Homologacao)
+            ->serie(1)
+            ->naturezaOperacao('Venda direta')
+            ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
+            ->addItem($this->item(tributos: $this->icms00()))
+            ->pagamento('01', 100)
+            ->build();
+
+        $payload = (new \FiscalLib\Adapters\FiscalApi\MapeadorDocumento())->paraEmissaoRequest($doc);
+
+        self::assertArrayNotHasKey('indicadorIntermediador', $payload);
+    }
+
+    public function testIntermediadorIndicadorInvalidoFalha(): void
+    {
+        $this->expectException(ValidationException::class);
+        NfeBuilder::nfe()->intermediador(2);
+    }
+
+    public function testIntermediadorSemCnpjFalha(): void
+    {
+        $this->expectException(ValidationException::class);
+        NfeBuilder::nfe()->intermediador(1);
     }
 
     public function testSemNaturezaOperacaoFalha(): void

@@ -64,6 +64,11 @@ no mapeador (`gtin: "SEM GTIN"`, `unidade: "UN"`). Exemplo (CST 10 + ST + IPI):
 }
 ```
 
+NF-e via marketplace/intermediador (NT 2020.006 — `indIntermed`, só mod 55): o builder
+expõe `->intermediador(int $indicador, ?string $cnpj = null)` (0 = sem intermediador —
+default da API; 1 = site/plataforma de terceiros, exige CNPJ) e o payload ganha
+`"indicadorIntermediador": 1, "cnpjIntermediador": "..."` → grupo `infIntermed`.
+
 NFS-e DPS: `ambiente`, `serie`, `tomador{...}`, `servico{codigoTributarioNacional,
 descricaoServico, codigoNbs}`, `valores{valorServicos, tributacaoIssqn, retencaoIssqn,
 aliquotaIssqn, tributacaoFederal{...}}`, `ibscbs{finalidade, codigoIndicadorOperacao,
