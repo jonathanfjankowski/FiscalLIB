@@ -145,16 +145,20 @@ final class TaxEngineTest extends TestCase
 
     public function testDifalPartilha100Destino(): void
     {
+        // Cenário coerente: PR→BA, interestadual 7% (ICMS próprio remete 7% à
+        // UF de origem), interna do destino 18%, FCP destino 2%.
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 12)
+            $this->contexto()->icms(0, cst: '00', aliquota: 7)
                 ->difalInterestadual(7, aliquotaInternaUfDestino: 18, fcpUfDestino: 2)
         );
 
-        // Convênio 190/2017: 100% para o destino; origem = 0
+        // Convênio 190/2017 + MOC (rejeições 815/816): 100% do diferencial para
+        // o destino — vICMSUFDest = 1000 × (18% − 7%) = 110; origem = 0.
         self::assertSame(7, $r->icms->difal->aliquotaInterestadual);
         self::assertSame('1000.00', $r->icms->difal->baseDestino);
         self::assertSame('18.0000', $r->icms->difal->aliquotaDestino);
-        self::assertSame('180.00', $r->icms->difal->valorIcmsDestino);
+        self::assertSame('70.00', $r->icms->valor);
+        self::assertSame('110.00', $r->icms->difal->valorIcmsDestino);
         self::assertSame('0.00', $r->icms->difal->valorIcmsOrigem);
         self::assertSame('20.00', $r->icms->difal->valorFcpDestino);
     }

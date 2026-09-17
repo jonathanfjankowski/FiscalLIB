@@ -29,6 +29,14 @@ quando a rejeição técnica é ativada.
 
 ## [Não lançada]
 
+### Corrigido
+- **DIFAL: `valorIcmsDestino` era a interna cheia** — o motor calculava
+  `base × aliquotaInternaUfDestino`, mas o MOC (rejeições SEFAZ **815/816**)
+  define `vICMSUFDest = vBCUFDest × (pICMSUFDest − aliquotaInterestadual)`:
+  o ICMS próprio (base × interestadual) já remete à UF de origem. Exemplo
+  (BC 1000, inter 7%, interna 18%): 180,00 → **110,00**. Teste da matriz
+  reescrito com cenário coerente (próprio = interestadual).
+
 ### Adicionado
 - `NfeBuilder::intermediador(int $indicador, ?string $cnpj = null)` — suporte
   ao marketplace/intermediador (NT 2020.006, `indIntermed`, só NF-e 55; 0 =

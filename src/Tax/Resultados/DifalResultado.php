@@ -7,6 +7,7 @@ namespace FiscalLib\Tax\Resultados;
 /**
  * DIFAL — operação interestadual com consumidor final (impostosV2.icms.difal).
  * Partilha 100% para o destino (Convênio 190/2017): valorIcmsOrigem = 0.
+ * Fórmula MOC (rejeições 815/816): vICMSUFDest = vBCUFDest × (interna − interestadual).
  */
 final class DifalResultado
 {

@@ -380,12 +380,18 @@ final class TaxEngine implements TaxEngineInterface
         }
 
         $interna = $ctx->aliquotaInternaUfDestino;
+        $interestadual = (string) $ctx->aliquotaInterestadual;
+
+        // MOC (rejeições 815/816): vICMSUFDest = BC × (interna − interestadual) —
+        // o ICMS próprio já remete BC × interestadual à UF de origem. Partilha
+        // 100% destino desde 2019 → vICMSUFRemet = 0.
+        $diferenca = Matematica::subtrair($interna, $interestadual, 4);
 
         return new DifalResultado(
             aliquotaInterestadual: $ctx->aliquotaInterestadual,
             baseDestino: $base,
             aliquotaDestino: ArredondadorBancario::arredondar($interna, 4),
-            valorIcmsDestino: Matematica::percentualDe($base, $interna),
+            valorIcmsDestino: Matematica::percentualDe($base, $diferenca),
             valorIcmsOrigem: '0.00',
             fcpPercentualDestino: $ctx->aliquotaFcpUfDestino,
             valorFcpDestino: $ctx->aliquotaFcpUfDestino === null ? null : Matematica::percentualDe($base, $ctx->aliquotaFcpUfDestino),

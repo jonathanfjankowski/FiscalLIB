@@ -53,13 +53,16 @@ FCP próprio **não** compõe o total da nota; FCP-ST compõe.
 
 ```
 aliquotaInterestadual ∈ {4, 7, 12}
-vBCUFDest    = base própria
+vBCUFDest    = base própria (o ICMS próprio remete base × interestadual à origem)
 pICMSUFDest  = alíquota interna do destino
-vICMSUFDest  = vBCUFDest × pICMSUFDest
+vICMSUFDest  = vBCUFDest × (pICMSUFDest − aliquotaInterestadual)
 vICMSUFRemet = 0
 ```
 
-> A spec original (§4.3) trazia a fórmula da partilha antiga (2016–2018) — corrigida aqui.
+> Fórmula do MOC — validada pela SEFAZ com as rejeições **815/816**
+> ("Valor do ICMS Interestadual para UF de destino/remetente difere do
+> calculado"). A spec original (§4.3) trazia a partilha antiga (2016–2018) —
+> corrigida aqui.
 
 ## IPI
 
