@@ -129,8 +129,10 @@ final class SandboxE2eTest extends TestCase
 
     public function testNfceAutorizadaComChave44(): void
     {
+        // Tenant em regime normal (Inova Simples é forma jurídica, não optante
+        // do Simples Nacional) — NFC-e usa CST, não CSOSN. Alíquota interna PR.
         $tributos = self::$lib->taxEngine()->calcularNfe(
-            NfeTaxContext::make()->valores(1, 25.50)->icms(0, csosn: '102')
+            NfeTaxContext::make()->valores(1, 25.50)->icms(0, cst: '00', aliquota: 18)
         );
         $documento = self::$lib->nfce()->novo()
             ->naturezaOperacao('Venda balcao integracao')

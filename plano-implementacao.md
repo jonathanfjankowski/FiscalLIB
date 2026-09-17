@@ -1,6 +1,8 @@
 # FiscalLIB — Plano de Implementação (Pacote PHP)
 
-> **Status:** plano aprovado, **nada implementado ainda**.
+> **Status:** implementado — v0.1.0 lançada (2026-09-07); E2E contra FiscalAPI
+> + SEFAZ-PR homologação real validado (ver `CHANGELOG.md`). Este documento é
+> o plano original, preservado como referência histórica.
 > **Data:** 2026-09-06
 > **Fontes:** `spec-lib-fiscal.md` (raiz), FiscalAPI real (`C:\Projetos\Pessoal\FiscalAPI`) — `docs/integracao-api.md` e `docs/plano-evolucao-contrato-v2.md`.
 

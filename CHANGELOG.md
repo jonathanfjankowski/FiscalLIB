@@ -27,7 +27,7 @@ quando a rejeição técnica é ativada.
 - Integração Laravel opcional (ServiceProvider + Facade + config publicável).
 - 84 testes (unit/contract/port) + PHPStan nível 5 limpo.
 
-## [Não lançada]
+## [0.1.1] — 2026-09-17
 
 ### Corrigido
 - **DIFAL: `valorIcmsDestino` era a interna cheia** — o motor calculava
@@ -44,6 +44,9 @@ quando a rejeição técnica é ativada.
   adaptador serializa `indicadorIntermediador`/`cnpjIntermediador` no payload
   → grupo `infIntermed`. Sem o campo a SEFAZ-PR rejeita a NF-e com 434.
 - 4 testes novos (builder + mapeamento do intermediador) — 88 no total.
+- Guia de integração: seção 9.6 "Octane / FrankenPHP (worker mode)" — o que é seguro,
+  proibição de polling bloqueante em request HTTP, caveat do singleton capturando
+  config por worker e receita multi-tenant.
 
 ### Alterado
 - **Suíte de integração (`SandboxE2eTest`) alinhada à homologação real
@@ -55,21 +58,14 @@ quando a rejeição técnica é ativada.
   6102 (521/693), PIS/COFINS (745) e IBS/CBS com as alíquotas de teste 2026
   — IBS UF 0,1% / CBS 0,9% (1026). NF-e e NFC-e progridem até a rejeição
   230 (IE do emitente não cadastrada, pendência cadastral em resolução).
+  NFC-e do E2E usa CST 00 (regime normal do tenant — OKTO é Inova Simples
+  como forma jurídica, sem opt-in no Simples Nacional).
 - `phpstan.neon` exclui `tests/E2E` (scripts manuais de diagnóstico, fora da
   suíte).
 - Novos scripts de suporte em `tests/E2E/`: `bootstrap-cert.php` (tenant +
   api-key + certificado A1), `set-perfil.php` (perfil fiscal do emitente),
   `diag-emitir.php`/`diag-nfce.php`/`diag-modelos.php` (emissão dirigida com
   motivoStatus terminal).
-
-## [Não lançada] — docs e worker
-
-### Adicionado
-- Guia de integração: seção 9.6 "Octane / FrankenPHP (worker mode)" — o que é seguro,
-  proibição de polling bloqueante em request HTTP, caveat do singleton capturando
-  config por worker e receita multi-tenant.
-
-### Alterado
 - `FiscalLib::gestao()` agora memoiza a instância `GestaoFiscalApi` (como os demais
   serviços), reutilizando o Guzzle client em vez de criar um novo a cada chamada.
 - Docblock do `FiscalLibServiceProvider` documenta o comportamento do binding singleton
