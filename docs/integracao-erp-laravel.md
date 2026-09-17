@@ -1081,6 +1081,35 @@ reagende a consulta (o job acima já faz isso naturalmente, consultando de novo)
 - O ambiente vai no payload **e** no header `X-Fiscal-Ambiente`; o mesmo processo
   Emitente→builder→emissor funciona nos dois ambientes, só muda a config.
 
+### 9.6 Octane / FrankenPHP (worker mode)
+
+Em Laravel Octane (inclusive `--server=frankenphp`) ou FrankenPHP worker mode, a aplicação
+e os singletons do container **persistem entre requests**. A lib foi projetada para isso:
+
+- **Nenhum estado estático mutável** — não há `static $` de cache em `src/`. `TaxEngine`
+  é puro, `FiscalConfig` é readonly, os serviços (`ServicoNfe`, etc.) guardam só
+  referências readonly e os builders são criados por documento. Não há nada para
+  "flushar" entre requests.
+- **Sem I/O local**: HTTP é Guzzle (PSR-18), o certificado A1 é enviado à FiscalAPI via
+  multipart (assinatura server-side) e nenhum arquivo temporário é escrito em path fixo.
+- O singleton `'fiscal-lib'` mantém o Guzzle client entre requests — desejável: reaproveita
+  o pool de conexões (TCP/TLS) para a API fiscal.
+
+Regras para o ERP:
+
+1. **Nunca chame `emitir()`/`aguardarTerminal()` dentro de um request HTTP.** O polling
+   (`AguardadorTerminal`) faz `sleep()` até 300 s e o retry de rede usa `usleep()` — em
+   worker mode isso prende um worker inteiro por minutos. Em request, use `emitirAsync()`
+   (202) e mova a consulta para job de fila (seção 9.3). O padrão do `sleep()`/`usleep()`
+   é adequado a scripts/CLI e jobs de fila, não a workers de request.
+2. **Config é capturada por worker.** O singleton monta a `FiscalConfig` na primeira
+   resolução de cada worker; `config()->set()` em runtime não tem efeito até o worker
+   reiniciar. Para ERP **multi-tenant** (api_key por tenant), não confie no singleton:
+   resolva por tenant com `FiscalLib::comFiscalApi($configDoTenant)` ou troque o binding
+   para `scoped()` (`FiscalLibServiceProvider`).
+3. **Mudanças no `.env`** exigem `php artisan config:cache` + reload do Octane
+   (`php artisan octane:reload`), como em qualquer pacote — não é específico desta lib.
+
 ---
 
 ## 10. Erros e limitações conhecidas

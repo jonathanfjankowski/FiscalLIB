@@ -42,6 +42,7 @@ final class FiscalLib
     private ?ServicoNfse $servicoNfse = null;
     private ?ServicoEventos $servicoEventos = null;
     private ?AguardadorTerminal $aguardador = null;
+    private ?GestaoFiscalApi $gestaoApi = null;
 
     public function __construct(
         private readonly EmissorInterface $emissor,
@@ -103,7 +104,7 @@ final class FiscalLib
     public function gestao(): ?GestaoFiscalApi
     {
         if ($this->emissor instanceof EmissorFiscalApi) {
-            return new GestaoFiscalApi($this->config ?? $this->emissor->config());
+            return $this->gestaoApi ??= new GestaoFiscalApi($this->config ?? $this->emissor->config());
         }
 
         return null;

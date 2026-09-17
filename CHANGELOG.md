@@ -26,3 +26,16 @@ quando a rejeição técnica é ativada.
 - Validador HMAC-SHA256 de webhooks (janela anti-replay 5 min).
 - Integração Laravel opcional (ServiceProvider + Facade + config publicável).
 - 84 testes (unit/contract/port) + PHPStan nível 5 limpo.
+
+## [Não lançada]
+
+### Adicionado
+- Guia de integração: seção 9.6 "Octane / FrankenPHP (worker mode)" — o que é seguro,
+  proibição de polling bloqueante em request HTTP, caveat do singleton capturando
+  config por worker e receita multi-tenant.
+
+### Alterado
+- `FiscalLib::gestao()` agora memoiza a instância `GestaoFiscalApi` (como os demais
+  serviços), reutilizando o Guzzle client em vez de criar um novo a cada chamada.
+- Docblock do `FiscalLibServiceProvider` documenta o comportamento do binding singleton
+  em Laravel Octane/FrankenPHP (config capturada na primeira resolução de cada worker).

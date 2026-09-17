@@ -21,6 +21,13 @@ use FiscalLib\FiscalLib;
  *   ];
  *
  * Uso: app('fiscal-lib')->nfe()->... ou FiscalLibFacade::nfe()->...
+ *
+ * Octane/FrankenPHP (worker mode): o binding é singleton, então a FiscalConfig
+ * é lida na primeira resolução de cada worker e reutilizada entre requests
+ * (junto com o Guzzle client — desejável para reaproveitar conexões).
+ * config()->set() em runtime NÃO tem efeito até o worker reiniciar.
+ * Multi-tenant: resolva por tenant com FiscalLib::comFiscalApi() usando a
+ * FiscalConfig do tenant, ou troque este binding para scoped().
  */
 final class FiscalLibServiceProvider extends \Illuminate\Support\ServiceProvider
 {
