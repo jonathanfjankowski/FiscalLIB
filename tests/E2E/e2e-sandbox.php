@@ -17,6 +17,13 @@ declare(strict_types=1);
 
 use FiscalLib\Adapters\FiscalApi\GestaoFiscalApi;
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstIpi;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\Csosn;
+use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\OrigemMercadoria;
+use FiscalLib\Common\Enums\UF;
 use FiscalLib\Common\Enums\ModeloDocumento;
 use FiscalLib\Common\Enums\TipoManifestacao;
 use FiscalLib\Common\ValueObjects\Cnpj;
@@ -128,12 +135,12 @@ function aguardar(FiscalLib $lib, string $id, string $esperado): \FiscalLib\Docu
 passo('Emitir NFC-e (CSOSN 102, sem destinatário)');
 $nfeEngine = $lib->taxEngine();
 $tributosNfce = $nfeEngine->calcularNfe(
-    NfeTaxContext::make()->valores(1, 25.50)->icms(0, csosn: '102')
+    NfeTaxContext::make()->valores(1, 25.50)->icms(OrigemMercadoria::Nacional, Csosn::TributadaSemPermissaoDeCredito)
 );
 $nfce = $lib->nfce()->novo()
     ->naturezaOperacao('Venda balcao E2E')
     ->addItem(item(1, 25.50, $tributosNfce, '5102'))
-    ->pagamento('01', 25.50)
+    ->pagamento(FormaPagamento::Dinheiro, 25.50)
     ->build();
 $aceite = $lib->nfce()->emitirAsync($nfce);
 ok("aceite 202: id={$aceite->documentoId} status={$aceite->status}");
@@ -152,9 +159,9 @@ ok("mesmo documento em ambas chamadas: {$aceiteA->documentoId}");
 // -------------------------------------------------------------------- NF-e
 passo('Emitir NF-e (CST 00 + PIS/COFINS + destinatário + frete)');
 $tributosNfe = $nfeEngine->calcularNfe(
-    NfeTaxContext::make()->valores(3, 40)->icms(0, cst: '00', aliquota: 18, fcp: 2)
-        ->ipi('50', aliquota: 5)
-        ->pis('01', '1.65')->cofins('01', '7.60')
+    NfeTaxContext::make()->valores(3, 40)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18, fcp: 2)
+        ->ipi(CstIpi::SaidaTributada, aliquota: 5)
+        ->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')
 );
 $nfe = $lib->nfe()->novo()
     ->naturezaOperacao('Venda de mercadoria E2E')
@@ -162,11 +169,11 @@ $nfe = $lib->nfe()->novo()
         Cnpj::criar('45997418000153'),
         'Comprador E2E LTDA',
         inscricaoEstadual: 'ISENTO',
-        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP, nomeMunicipio: 'São Paulo'),
     ))
     ->addItem(item(3, 40, $tributosNfe, '6102'))
     ->frete(15)
-    ->pagamento('03', 135)
+    ->pagamento(FormaPagamento::CartaoCredito, 135)
     ->build();
 $valorNotaEsperado = 120 + 15 + 6; // brutos + frete + IPI (fórmula v2; ST/FCP-ST = 0)
 abs((float) $nfe->totais->valorNota - $valorNotaEsperado) < 0.01 || falha('valorNota v2 errado: ' . $nfe->totais->valorNota);
@@ -242,7 +249,7 @@ ok("cStat {$status['cStat']} — {$status['xMotivo']}");
 passo('Inconsistência aritmética → 422 com campo');
 try {
     $itemRuim = new ItemFiscal('SKU-BAD', 'Produto inválido', '2.0000', '50.00', '90.00');
-    $docRuim = $lib->nfe()->novo()->naturezaOperacao('Venda ruim')->addItem($itemRuim)->pagamento('01', 90)->build();
+    $docRuim = $lib->nfe()->novo()->naturezaOperacao('Venda ruim')->addItem($itemRuim)->pagamento(FormaPagamento::Dinheiro, 90)->build();
     // build() já bloquearia; força o payload diretamente com valorTotal incoerente:
     $payload = (new \FiscalLib\Adapters\FiscalApi\MapeadorDocumento())->paraEmissaoRequest($docRuim);
     falha('builder deveria ter bloqueado item incoerente');

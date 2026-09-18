@@ -24,7 +24,7 @@ baseComReducao  = basePropria × (1 − percentualReducaoBc / 100)     (CST 20/5
 | 70 | redução + ST própria | ST parte da **base reduzida** |
 | 90 | livre | valida o que vier; combinações opcionais |
 
-Fora do contrato (falham alto em `build()`/cálculo): CST 02/15/30/53/61, `ICMSPart`, `ICMSST`.
+Fora do contrato não compila (enums `CstIcms`/`Csosn` — a case não existe): CST 02/15/30/53/61, `ICMSPart`, `ICMSST`.
 
 ## ICMS — Simples Nacional (CSOSN)
 
@@ -64,20 +64,38 @@ vICMSUFRemet = 0
 > calculado"). A spec original (§4.3) trazia a partilha antiga (2016–2018) —
 > corrigida aqui.
 
+## Alíquotas embutidas (`Tax\Tabelas\ResolvedorAliquotas`)
+
+O resolvedor entrega os **insumos** (dados determinísticos); o engine continua
+recebendo as alíquotas explícitas no contexto — a aritmética desta página não muda.
+
+| Dado | Regra embutida | Fonte |
+|------|----------------|-------|
+| Interestadual | orig ∈ {1,2,3,6,7,8} → 4%; origem sul/sudeste → 12% (destino s/s) ou 7% (demais); origem demais → 12% | Res. Senado 22/1989 e 13/2012 |
+| Interna geral | 27 UFs, regra geral do estado, **sem FCP** (`aliquotaInternaGeral`) | legislações estaduais (doc §2) |
+| FCP/FECP | 14 UFs com adicional; demais `null` (`aliquotaFcp`) | doc §4 (EC 132/2023, teto 2%) |
+| IBS/CBS | só 2026 fase-teste: CBS 0,9 · IBS UF 0,05 · IBS Mun 0,05; outro ano → `ValidationException` | LC 214/2025 art. 348 |
+
+Overrides (`comAliquotaInterna`/`comFcp`) são imutáveis e vencem a tabela — a
+interna geral **não serve** para produtos com alíquota diferenciada (bebidas,
+medicamentos, cesta básica); esses são sempre do ERP. Testes do resolvedor
+(`ResolvedorAliquotasTest`) validam contra o doc de tabelas — mudança de
+legislação atualiza tabela + doc + teste juntos.
+
 ## IPI
 
 | CSTs | Comportamento |
 |------|---------------|
 | 00, 49, 50, 99 | tributado — trio obrigatório (`cEnq` default `999`) |
 | 01–05, 51 | não tributado — sem valor |
-| outros | fora do contrato → `TaxInconsistencyException` |
+| outros | fora do contrato não compila (enum `CstIpi` não tem a case) |
 
 ## PIS / COFINS
 
 | CSTs | Comportamento |
 |------|---------------|
 | 01, 02 | tributado — trio obrigatório |
-| 03 | por quantidade — **não suportado** pelo contrato atual |
+| 03 | por quantidade — **não suportado** pelo contrato atual (enum `CstPisCofins` não tem a case) |
 | 04–09 | isento/NT/suspensão/monofásico — sem valor |
 | 99 | outras — trio quando alíquota informada |
 

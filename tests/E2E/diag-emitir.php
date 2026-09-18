@@ -10,6 +10,11 @@ declare(strict_types=1);
 require __DIR__ . '/../../vendor/autoload.php';
 
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\OrigemMercadoria;
+use FiscalLib\Common\Enums\UF;
 use FiscalLib\Adapters\FiscalApi\ClienteHttp;
 use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Config\FiscalConfig;
@@ -85,7 +90,7 @@ $lib = FiscalLib::comFiscalApi(
 );
 
 $tributos = $lib->taxEngine()->calcularNfe(
-    NfeTaxContext::make()->valores(1, 100)->icms(0, cst: '00', aliquota: 12)->pis('01', '1.65')->cofins('01', '7.60')->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
+    NfeTaxContext::make()->valores(1, 100)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 12)->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
 );
 $doc = $lib->nfe()->novo()
     ->naturezaOperacao('Venda diagnostico integracao')
@@ -93,7 +98,7 @@ $doc = $lib->nfe()->novo()
         Cnpj::criar('45997418000153'),
         'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL',
         inscricaoEstadual: '110042490114',
-        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP, nomeMunicipio: 'São Paulo'),
     ))
     ->addItem(new ItemFiscal(
         codigo: 'SKU-DIAG',
@@ -105,7 +110,7 @@ $doc = $lib->nfe()->novo()
         ncm: '84714900',
         cfop: '6102',
     ))
-    ->pagamento('01', 100)
+    ->pagamento(FormaPagamento::Dinheiro, 100)
     ->build();
 
 $aceite = $lib->nfe()->emitirAsync($doc);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FiscalLib\Documento;
 
+use FiscalLib\Common\Enums\UF;
+
 /**
  * Endereço compartilhado (contrato FiscalAPI: EnderecoDto / NfseEnderecoDto).
  */
@@ -16,7 +18,7 @@ final class Endereco
         public readonly ?string $complemento = null,
         public readonly ?string $bairro = null,
         public readonly ?string $codigoMunicipioIbge = null,
-        public readonly ?string $uf = null,
+        public readonly ?UF $uf = null,
         public readonly ?string $nomeMunicipio = null,
     ) {
     }

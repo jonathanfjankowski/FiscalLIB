@@ -28,6 +28,12 @@ composer require jonathanfjankowski/fiscal-lib
 ## Início rápido — NF-e (Regime Normal, CST 10 com ST)
 
 ```php
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstIpi;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\ModoDeterminacaoBc;
+use FiscalLib\Common\Enums\OrigemMercadoria;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\FiscalLib;
 use FiscalLib\Tax\Contextos\NfeTaxContext;
@@ -39,11 +45,11 @@ $tributos = $lib->taxEngine()->calcularNfe(
     NfeTaxContext::make()
         ->valores(quantidade: 2, valorUnitario: 50, desconto: 0)
         ->cfop('5102')
-        ->icms(0, cst: '10', aliquota: 18)
-        ->st(modBcSt: '4', mva: 30, aliquotaSt: 18)
-        ->ipi('50', aliquota: 10)
-        ->pis('01', '1.65')
-        ->cofins('01', '7.60')
+        ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaComCobrancaIcmsPorSt, aliquota: 18)
+        ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 30, aliquotaSt: 18)
+        ->ipi(CstIpi::SaidaTributada, aliquota: 10)
+        ->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')
+        ->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')
 );
 
 // 2) Monta o documento (builder valida as regras)
@@ -51,7 +57,7 @@ $documento = $lib->nfe()->novo()
     ->serie(1)
     ->naturezaOperacao('Venda de mercadoria')
     ->addItem(new ItemFiscal('SKU1', 'Produto', '2.0000', '50.00', '100.00', $tributos, cfop: '5102'))
-    ->pagamento('01', 100)
+    ->pagamento(FormaPagamento::Dinheiro, 100)
     ->build();
 
 // 3) Emite e aguarda o estado terminal (polling 2s→5s→10s→…)

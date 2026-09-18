@@ -8,6 +8,7 @@ use FiscalLib\Common\Enums\Ambiente;
 use FiscalLib\Common\Enums\FinalidadeNfe;
 use FiscalLib\Common\Enums\FormaPagamento;
 use FiscalLib\Common\Enums\IndicadorConsumidorFinal;
+use FiscalLib\Common\Enums\IndicadorIntermediador;
 use FiscalLib\Common\Enums\IndicadorPresenca;
 use FiscalLib\Common\Enums\ModeloDocumento;
 use FiscalLib\Common\Enums\TipoOperacao;
@@ -43,7 +44,7 @@ class NfeBuilder
     protected FinalidadeNfe $finalidade = FinalidadeNfe::Normal;
     protected TipoOperacao $tipoOperacao = TipoOperacao::Saida;
     protected ?IndicadorPresenca $indicadorPresenca = null;
-    protected ?int $indicadorIntermediador = null;
+    protected ?IndicadorIntermediador $indicadorIntermediador = null;
     protected ?string $cnpjIntermediador = null;
     protected IndicadorConsumidorFinal $consumidorFinal = IndicadorConsumidorFinal::Sim;
     protected ?Emitente $emitente = null;
@@ -118,22 +119,17 @@ class NfeBuilder
 
     /**
      * Indicador de intermediador/marketplace (NT 2020.006 — indIntermed, só NF-e 55).
-     * 0 = operação sem intermediador (default da FiscalAPI); 1 = operação em site ou
-     * plataforma de terceiros — nesse caso o CNPJ do intermediador é obrigatório.
+     * SemIntermediador é o default da FiscalAPI; PlataformaTerceiros exige o
+     * CNPJ do intermediador.
      */
-    public function intermediador(int $indicador, ?string $cnpj = null): static
+    public function intermediador(IndicadorIntermediador $indicador, ?string $cnpj = null): static
     {
-        if ($indicador !== 0 && $indicador !== 1) {
-            throw new \FiscalLib\Exceptions\ValidationException('Indicador de intermediador inválido.', [
-                'indicadorIntermediador' => ["Use 0 (sem intermediador) ou 1 (plataforma de terceiros); recebido {$indicador}."],
-            ]);
-        }
         if ($cnpj !== null) {
             $cnpj = Cnpj::criar($cnpj)->valor();
         }
-        if ($indicador === 1 && $cnpj === null) {
+        if ($indicador === IndicadorIntermediador::PlataformaTerceiros && $cnpj === null) {
             throw new \FiscalLib\Exceptions\ValidationException('Intermediador exige CNPJ.', [
-                'cnpjIntermediador' => ['indicadorIntermediador = 1 exige o CNPJ do intermediador.'],
+                'cnpjIntermediador' => ['IndicadorIntermediador::PlataformaTerceiros exige o CNPJ do intermediador.'],
             ]);
         }
         $this->indicadorIntermediador = $indicador;
@@ -170,7 +166,7 @@ class NfeBuilder
         return $this;
     }
 
-    public function pagamento(FormaPagamento|string $forma, string|int|float $valor): static
+    public function pagamento(FormaPagamento $forma, string|int|float $valor): static
     {
         $this->pagamentos[] = new Pagamento($forma, Matematica::escalar($valor, 2));
 

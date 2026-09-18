@@ -7,6 +7,7 @@ namespace FiscalLib\Documento;
 use FiscalLib\Common\Enums\Ambiente;
 use FiscalLib\Common\Enums\FinalidadeNfe;
 use FiscalLib\Common\Enums\IndicadorConsumidorFinal;
+use FiscalLib\Common\Enums\IndicadorIntermediador;
 use FiscalLib\Common\Enums\IndicadorPresenca;
 use FiscalLib\Common\Enums\ModeloDocumento;
 use FiscalLib\Common\Enums\TipoOperacao;
@@ -38,7 +39,7 @@ final class NfeDocumento
         public readonly array $pagamentos = [],
         public readonly array $nfesReferenciadas = [],
         public readonly ?string $informacoesComplementares = null, // ignorado pela FiscalAPI; útil p/ outros emissores
-        public readonly ?int $indicadorIntermediador = null,  // NT 2020.006 (indIntermed): 0=sem intermediador, 1=plataforma de terceiros — só NF-e (55)
+        public readonly ?IndicadorIntermediador $indicadorIntermediador = null, // NT 2020.006 (indIntermed) — só NF-e (55)
         public readonly ?string $cnpjIntermediador = null,    // obrigatório quando indicadorIntermediador = 1
     ) {
     }

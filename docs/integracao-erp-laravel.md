@@ -310,14 +310,14 @@ Construção fluent via `NfeTaxContext::make()`. Métodos reais:
 | `cfop()` | `cfop(string $cfop): self` | CFOP do item |
 | `valores()` | `valores(string|int|float $quantidade, string|int|float $valorUnitario, string|int|float $desconto = 0): self` | calcula `valorBruto = qtd × unitário` (2 casas) e aplica desconto |
 | `valorBruto()` | `valorBruto(string|int|float $valor): self` | define o bruto diretamente |
-| `icms()` | `icms(string|int $origem, ?string $cst = null, ?string $csosn = null, string|int|float|null $aliquota = null, ?string $modBc = '3', string|int|float|null $reducaoBc = null, string|int|float|null $fcp = null): self` | ICMS próprio (CST regime normal OU CSOSN SN — nunca os dois) |
-| `st()` | `st(string $modBcSt, string|int|float|null $mva = null, string|int|float|null $aliquotaSt = null, string|int|float|null $reducaoBcSt = null, string|int|float|null $fcpSt = null): self` | ST própria (CST 10/70/90, CSOSN 201/202/203/900) |
+| `icms()` | `icms(OrigemMercadoria $origem, CstIcms\|Csosn\|null $cst = null, string\|int\|float\|null $aliquota = null, ModoDeterminacaoBc $modBc = ValorOperacao, string\|int\|float\|null $reducaoBc = null, string\|int\|float\|null $fcp = null): self` | ICMS próprio — o tipo do 2º parâmetro escolhe o regime: `CstIcms` (normal) ou `Csosn` (SN); nunca os dois |
+| `st()` | `st(ModoDeterminacaoBc $modBcSt, string\|int\|float\|null $mva = null, string\|int\|float\|null $aliquotaSt = null, string\|int\|float\|null $reducaoBcSt = null, string\|int\|float\|null $fcpSt = null): self` | ST própria (CST 10/70/90, CSOSN 201/202/203/900) |
 | `stRetida()` | `stRetida(string|int|float $baseCalculoStRetida, string|int|float $aliquotaStRetida, string|int|float|null $valorStRetido = null, string|int|float|null $valorIcmsSubstituto = null): self` | ST retida (CST 60 / CSOSN 500) |
 | `diferimento()` | `diferimento(string|int|float $percentual): self` | CST 51 |
 | `creditoSimples()` | `creditoSimples(string|int|float $percentual): self` | crédito SN (CSOSN 101/201/900) |
-| `difalInterestadual()` | `difalInterestadual(int $aliquotaInterestadual, string|int|float $aliquotaInternaUfDestino, string|int|float|null $fcpUfDestino = null): self` | DIFAL (alíquota interestadual 4, 7 ou 12) |
-| `ipi()` | `ipi(string $cst, string|int|float|null $aliquota = null, string $cEnq = '999'): self` | IPI |
-| `pis()` / `cofins()` | `pis(string $cst, ?string $aliquota = null)` / idem | PIS/COFINS |
+| `difalInterestadual()` | `difalInterestadual(int $aliquotaInterestadual, string|int|float $aliquotaInternaUfDestino, string|int|float|null $fcpUfDestino = null): self` | DIFAL — use `ResolvedorAliquotas::parametrosDifal()` para resolver os três valores (§5.6) |
+| `ipi()` | `ipi(CstIpi $cst, string|int|float|null $aliquota = null, string $cEnq = '999'): self` | IPI |
+| `pis()` / `cofins()` | `pis(CstPisCofins $cst, string|int|float|null $aliquota = null)` / idem | PIS/COFINS |
 | `ibsCbs()` | `ibsCbs(IbsCbsEntrada $entrada): self` | reforma — LC 214/2025 |
 | `is()` | `is(IsEntrada $entrada): self` | Imposto Seletivo |
 
@@ -345,17 +345,22 @@ Venda de 2 unidades a R$ 50,00 (bruto R$ 100,00), ICMS 18%, MVA 30%, ST 18%,
 IPI 10%, PIS 1,65%, COFINS 7,60%:
 
 ```php
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstIpi;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\ModoDeterminacaoBc;
+use FiscalLib\Common\Enums\OrigemMercadoria;
 use FiscalLib\Tax\Contextos\NfeTaxContext;
 
 $tributos = $lib->taxEngine()->calcularNfe(
     NfeTaxContext::make()
         ->valores(quantidade: 2, valorUnitario: 50)
         ->cfop('5102')
-        ->icms(0, cst: '10', aliquota: 18)
-        ->st(modBcSt: '4', mva: 30, aliquotaSt: 18)
-        ->ipi('50', aliquota: 10)
-        ->pis('01', '1.65')
-        ->cofins('01', '7.60')
+        ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaComCobrancaIcmsPorSt, aliquota: 18)
+        ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 30, aliquotaSt: 18)
+        ->ipi(CstIpi::SaidaTributada, aliquota: 10)
+        ->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')
+        ->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')
 );
 ```
 
@@ -383,27 +388,40 @@ $tributos->paraArray();  // array no formato impostosV2 (nulos omitidos)
 ### 5.3 DIFAL (interestadual para consumidor final)
 
 Partilha vigente do Convênio 190/2017: 100% para o UF de destino (`valorIcmsOrigem = 0`).
+O `ResolvedorAliquotas` (§5.6) resolve os três parâmetros — interestadual pela regra
+regional (Res. Senado 22/1989 e 13/2012), interna e FCP do destino pela tabela embutida:
 
 ```php
+use FiscalLib\Common\Enums\UF;
+use FiscalLib\Tax\Tabelas\ResolvedorAliquotas;
+
+$parametros = (new ResolvedorAliquotas())->parametrosDifal(UF::MG, UF::SP, OrigemMercadoria::Nacional);
+// MG→SP: interestadual 12, interna SP '18.00', FCP SP '2.00' — pronto para o contexto
+
 $difal = $lib->taxEngine()->calcularNfe(
     NfeTaxContext::make()
         ->valores(1, 1000)
         ->cfop('6108')
-        ->icms(0, cst: '00', aliquota: 12)
-        ->difalInterestadual(7, 18, fcpUfDestino: 2)
+        ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 12)
+        ->difalInterestadual(
+            $parametros->aliquotaInterestadual,
+            $parametros->aliquotaInternaUfDestino,
+            $parametros->aliquotaFcpUfDestino,
+        )
 );
 
-$difal->icms->difal->aliquotaInterestadual; // 7
+$difal->icms->difal->aliquotaInterestadual; // 12
 $difal->icms->difal->baseDestino;           // '1000.00' (vBCUFDest)
 $difal->icms->difal->aliquotaDestino;       // '18.0000' (pICMSUFDest)
-$difal->icms->difal->valorIcmsDestino;      // '180.00'  (vICMSUFDest)
+$difal->icms->difal->valorIcmsDestino;      // '60.00'   (vICMSUFDest = 1000 × (18% − 12%))
 $difal->icms->difal->valorIcmsOrigem;       // '0.00'    (vICMSUFRemet)
 $difal->icms->difal->valorFcpDestino;       // '20.00'   (vFCPUFDest)
 ```
 
 Sem `difalInterestadual()`, nada é calculado (o campo `difal` fica `null`).
 Com ele, `aliquotaInterestadual` precisa ser 4, 7 ou 12 e a alíquota interna é
-obrigatória — senão `ValidationException`.
+obrigatória — senão `ValidationException`. Produto com alíquota interna
+diferenciada no destino? Sobrescreva antes: `comAliquotaInterna(UF::SP, '12.00')`.
 
 ### 5.4 Simples Nacional (CSOSN) e reforma (IBS/CBS, IS)
 
@@ -413,7 +431,7 @@ $sn = $lib->taxEngine()->calcularNfe(
     NfeTaxContext::make()
         ->regime(RegimeTributario::SimplesNacional)
         ->valores(2, 50)
-        ->icms(0, csosn: '101')
+        ->icms(OrigemMercadoria::Nacional, Csosn::TributadaComPermissaoDeCredito)
         ->creditoSimples(2.5)
 );
 $sn->icms->csosn;                  // '101'
@@ -423,7 +441,7 @@ $sn->icms->valorCreditoSimples;    // '2.50' (sem ICMS próprio)
 $reforma = $lib->taxEngine()->calcularNfe(
     NfeTaxContext::make()
         ->valores(1, 100)
-        ->icms(0, cst: '00', aliquota: 18)
+        ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
         ->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 9, aliquotaCbs: 1))
 );
 $reforma->ibsCbs->valorIbsEstadual; // '9.00'
@@ -465,6 +483,53 @@ TaxEngine já é `bruto − desconto`.
 A tabela de CSTs/CSOSNs suportados, fórmulas por CST e regras de FCP/ST/diferimento
 estão em [fiscal-rules.md](fiscal-rules.md) — não são duplicadas aqui. Resumo do que
 **falha alto** no cálculo: seção 10 deste guia.
+
+### 5.6 Alíquotas embutidas (`ResolvedorAliquotas`)
+
+O ERP não precisa saber de cor a regra regional nem as alíquotas gerais por estado:
+`FiscalLib\Tax\Tabelas\ResolvedorAliquotas` embute os dados determinísticos
+(consulte `tabelas-aliquotas-fiscallib.md` para as fontes legais e vigência).
+Ele é **puro** (sem I/O) e o ERP o consulta ANTES de montar o contexto — o
+`TaxEngine` continua exigindo as alíquotas explícitas, então todo cálculo mantém
+rastro auditável.
+
+```php
+use FiscalLib\Common\Enums\OrigemMercadoria;
+use FiscalLib\Common\Enums\UF;
+use FiscalLib\Tax\Tabelas\ResolvedorAliquotas;
+
+$resolvedor = new ResolvedorAliquotas();
+
+// Interestadual 4/7/12 por par de UFs × origem da mercadoria
+$resolvedor->aliquotaInterestadual(UF::PR, UF::BA, OrigemMercadoria::Nacional); // 7
+$resolvedor->aliquotaInterestadual(UF::SP, UF::MG, OrigemMercadoria::Nacional); // 12
+$resolvedor->aliquotaInterestadual(UF::SP, UF::BA, OrigemMercadoria::EstrangeiraImportacaoDireta); // 4
+
+// DIFAL completo do destino (veja §5.3)
+$resolvedor->parametrosDifal(UF::PR, UF::BA, OrigemMercadoria::Nacional);
+
+// Alíquota interna GERAL do estado e FCP adicional (null = UF sem FCP)
+$resolvedor->aliquotaInternaGeral(UF::SP); // '18.00'
+$resolvedor->aliquotaFcp(UF::RJ);          // '2.00'
+
+// IBS/CBS de referência (só 2026 — fase-teste; outros anos: forneça via ERP)
+$resolvedor->aliquotasIbsCbs(2026); // CBS 0.90 | IBS UF 0.05 | IBS Mun 0.05
+```
+
+**Overrides** (imutáveis — devolvem nova instância e vencem a tabela): a tabela
+traz a regra geral do estado; produtos com alíquota diferenciada (medicamentos,
+cesta básica, bebidas 25–29%, telecom...) **exigem** o override do ERP por item.
+
+```php
+$resolvedor = $resolvedor
+    ->comAliquotaInterna(UF::SP, '12.00')  // produto com benefício em SP
+    ->comFcp(UF::RJ, null);                // produto não sujeito ao FECP
+```
+
+O que **não** está embutido (continua do ERP): MVA-ST por NCM×UF, alíquotas de
+ST por protocolo, tabela TIPI (IPI), monofásicas PIS/COFINS, ISS municipal,
+códigos NCM/CEST/CFOP/IBGE e benefícios estaduais (cBenef). Para esses, mantenha
+suas tabelas de produto; a responsabilidade da lib é só o cálculo.
 
 ---
 
@@ -522,7 +587,7 @@ $emitente = new Emitente(
     razaoSocial: 'Empresa Emitente Ltda',
     nomeFantasia: 'Emitente',
     inscricaoEstadual: '123456789012',
-    endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP'),
+    endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP),
 );
 
 $destinatario = new Destinatario(
@@ -536,7 +601,7 @@ $destinatario = new Destinatario(
         complemento: 'Sala 10',
         bairro: 'Sé',
         codigoMunicipioIbge: '3550308',          // 7 dígitos IBGE
-        uf: 'SP',
+        uf: UF::SP,
         nomeMunicipio: 'São Paulo',
     ),
 );
@@ -616,11 +681,11 @@ $tributos = $lib->taxEngine()->calcularNfe(
     NfeTaxContext::make()
         ->valores(quantidade: 2, valorUnitario: 50)
         ->cfop('5102')
-        ->icms(0, cst: '10', aliquota: 18)
-        ->st(modBcSt: '4', mva: 30, aliquotaSt: 18)
-        ->ipi('50', aliquota: 10)
-        ->pis('01', '1.65')
-        ->cofins('01', '7.60')
+        ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaComCobrancaIcmsPorSt, aliquota: 18)
+        ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 30, aliquotaSt: 18)
+        ->ipi(CstIpi::SaidaTributada, aliquota: 10)
+        ->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')
+        ->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')
 );
 
 // 2) Documento
@@ -638,7 +703,7 @@ $documento = $lib->nfe()->novo()
             numero: '1',
             bairro: 'Sé',
             codigoMunicipioIbge: '3550308',
-            uf: 'SP',
+            uf: UF::SP,
         ),
     ))
     ->addItem(new ItemFiscal(
@@ -846,8 +911,9 @@ try {
 
 Validações locais da lib (antes de qualquer HTTP) lançam `ValidationException`
 (build), `MissingFieldException` (campo obrigatório ausente no cálculo),
-`TaxInconsistencyException` (combinação tributária fora do contrato) e
-`InvalidValueException` (CNPJ/CPF/chave/CFOP inválidos).
+`TaxInconsistencyException` (violação de regra tributária — ex.: CST 00 com
+redução) e `InvalidValueException` (CNPJ/CPF/chave/CFOP inválidos). CST/CSOSN
+fora do contrato não chega a exceção: não compila (enums).
 
 ---
 
@@ -1118,11 +1184,11 @@ Confirmados no código (`Tax\TaxEngine`, builders, adaptador) e em [fiscal-rules
 
 | # | Limitação | Comportamento |
 |---|---|---|
-| 1 | ICMS CST `02/15/30/53/61`, `ICMSPart` e `ICMSST` fora do contrato | `TaxInconsistencyException` no `calcularNfe()` — a API rejeitaria com 422 |
-| 2 | **CST 50 também não está no conjunto suportado do código** (`00/10/20/40/41/51/60/70/90`) | `TaxInconsistencyException`. Nota: a tabela de ICMS de [fiscal-rules.md](fiscal-rules.md) menciona "40/41/50" sem valores, mas o código não aceita CST 50 — prevalece o código |
-| 3 | PIS/COFINS CST `03` (por quantidade) fora do contrato atual | `TaxInconsistencyException` |
-| 4 | PIS/COFINS CST fora de `01/02/04–09/99` | `TaxInconsistencyException` |
-| 5 | IPI CST fora de `00, 01–05, 49, 50, 51, 99` | `TaxInconsistencyException` |
+| 1 | ICMS CST `02/15/30/53/61`, `ICMSPart` e `ICMSST` fora do contrato | **não compila** — a case não existe no enum `CstIcms` (a API rejeitaria com 422) |
+| 2 | **CST 50 também não está no contrato** (cases do `CstIcms`: `00/10/20/40/41/51/60/70/90`) | idem — sem case no enum. Nota: a tabela de ICMS de [fiscal-rules.md](fiscal-rules.md) menciona "40/41/50" sem valores, mas o contrato não aceita CST 50 — prevalece o código |
+| 3 | PIS/COFINS CST `03` (por quantidade) fora do contrato atual | não compila — sem case no enum `CstPisCofins` |
+| 4 | PIS/COFINS CST fora de `01/02/04–09/99` | não compila — idem |
+| 5 | IPI CST fora de `00, 01–05, 49, 50, 51, 99` | não compila — idem no enum `CstIpi` |
 | 6 | CST `00` com redução de BC | `TaxInconsistencyException` ("use CST 20") |
 | 7 | CST `20/70` sem `percentualReducaoBc`; CST tributado sem `aliquotaIcms`; ST própria sem `modBcSt + aliquotaSt`; CST `60`/CSOSN `500` sem `baseCalculoStRetida + aliquotaStRetida` | `MissingFieldException` |
 | 8 | DIFAL sem `aliquotaInterestadual = 4/7/12` ou sem alíquota interna | `ValidationException` |
@@ -1137,6 +1203,7 @@ Confirmados no código (`Tax\TaxEngine`, builders, adaptador) e em [fiscal-rules
 | 17 | CC-e (carta de correção) | apenas NF-e (modelo 55); NFC-e: cancelar e reemitir |
 | 18 | Valores monetários/decimais | sempre `string` com casas fixas no modelo (ex.: `'100.00'`, `'18.0000'`); o adaptador converte para número JSON no envio |
 
-Nenhuma destas limitações é silenciosa: todas as combinações não suportadas de CST/CSOSN
-falham alto com `TaxInconsistencyException`/`MissingFieldException`/`ValidationException`
+Nenhuma destas limitações é silenciosa: combinações fora do contrato não compilam
+(enums de CST/CSOSN), e violações de regra falham alto com
+`TaxInconsistencyException`/`MissingFieldException`/`ValidationException`
 antes de sair da aplicação.

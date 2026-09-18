@@ -6,6 +6,8 @@ namespace FiscalLib\Tests\Contract;
 
 use FiscalLib\Adapters\FiscalApi\MapeadorDocumento;
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\UF;
 use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Documento\Destinatario;
 use FiscalLib\Documento\Endereco;
@@ -59,7 +61,7 @@ final class MapeadorDocumentoTest extends TestCase
             ->destinatario(new Destinatario(
                 Cnpj::criar('11444777000161'),
                 'Cliente Teste Ltda',
-                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP'),
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP),
             ))
             ->addItem(new ItemFiscal(
                 codigo: 'SKU1',
@@ -71,7 +73,7 @@ final class MapeadorDocumentoTest extends TestCase
                 ncm: '12345678',
                 cfop: '5102',
             ))
-            ->pagamento('01', 100)
+            ->pagamento(FormaPagamento::Dinheiro, 100)
             ->frete(10)
             ->build();
 

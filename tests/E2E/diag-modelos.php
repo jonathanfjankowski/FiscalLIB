@@ -11,6 +11,10 @@ require __DIR__ . '/../../vendor/autoload.php';
 
 use FiscalLib\Adapters\FiscalApi\GestaoFiscalApi;
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\OrigemMercadoria;
+use FiscalLib\Common\Enums\UF;
 use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\Documento\Endereco;
@@ -87,7 +91,7 @@ $lib = FiscalLib::comFiscalApi(
 
 // ---- NFC-e ------------------------------------------------------------
 $tributos = $lib->taxEngine()->calcularNfe(
-    NfeTaxContext::make()->valores(1, 25.50)->icms(0, cst: '00', aliquota: 18)
+    NfeTaxContext::make()->valores(1, 25.50)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
 );
 $nfce = $lib->nfce()->novo()
     ->naturezaOperacao('Venda balcao diagnostico')
@@ -101,7 +105,7 @@ $nfce = $lib->nfce()->novo()
         ncm: '84714900',
         cfop: '5102',
     ))
-    ->pagamento('01', 25.50)
+    ->pagamento(FormaPagamento::Dinheiro, 25.50)
     ->build();
 
 $aceite = $lib->nfce()->emitirAsync($nfce);
@@ -119,7 +123,7 @@ $nfse = $lib->nfse()->novo()
     ->tomador(new Tomador(
         Cnpj::criar('45997418000153'),
         'Tomador Integracao LTDA',
-        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP, nomeMunicipio: 'São Paulo'),
     ))
     ->servico(new ServicoFiscal('010701', 'Desenvolvimento de software diagnostico', codigoNbs: '112011000'))
     ->tributos($tributosNfse)

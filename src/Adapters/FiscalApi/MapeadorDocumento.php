@@ -78,7 +78,7 @@ final class MapeadorDocumento
         }
 
         if ($documento->indicadorIntermediador !== null) {
-            $request['indicadorIntermediador'] = $documento->indicadorIntermediador;
+            $request['indicadorIntermediador'] = $documento->indicadorIntermediador->value;
             if ($documento->cnpjIntermediador !== null) {
                 $request['cnpjIntermediador'] = $documento->cnpjIntermediador;
             }
@@ -331,7 +331,7 @@ final class MapeadorDocumento
             'complemento' => $endereco->complemento,
             'bairro' => $endereco->bairro,
             'codigoMunicipioIbge' => $endereco->codigoMunicipioIbge,
-            'uf' => $endereco->uf,
+            'uf' => $endereco->uf?->value,
             'nomeMunicipio' => $endereco->nomeMunicipio,
         ], static fn ($v) => $v !== null);
 

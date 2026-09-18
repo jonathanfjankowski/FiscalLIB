@@ -4,6 +4,45 @@ Todas as mudanças notáveis seguem [SemVer](https://semver.org). Notas Técnica
 SEFAZ que adicionam campos obrigatórios são **minor** enquanto toleradas e **major**
 quando a rejeição técnica é ativada.
 
+## [0.2.0] — 2026-09-18
+
+Release **breaking** (sem consumidor em produção). Contrato de payload e
+aritmética do `TaxEngine` inalterados — nada a espelhar na FiscalAPI.
+
+### Adicionado
+- **`Tax\Tabelas\ResolvedorAliquotas`** — alíquotas determinísticas embutidas,
+  puro (sem I/O), consultado pelo ERP antes de montar o contexto:
+  - `aliquotaInterestadual(UF, UF, OrigemMercadoria)` — 4/7/12 por par de UFs ×
+    origem (Res. Senado 22/1989 e 13/2012);
+  - `parametrosDifal(UF, UF, orig)` — interestadual + interna geral + FCP do
+    destino, casando 1:1 com `difalInterestadual()`;
+  - `aliquotaInternaGeral(UF)` / `aliquotaFcp(UF)` — regra geral das 27 UFs e
+    FCP/FECP adicional (fonte: `tabelas-aliquotas-fiscallib.md` §2/§4);
+  - `aliquotasIbsCbs(2026)` — fase-teste da LC 214/2025 (outro ano falha alto);
+  - overrides imutáveis `comAliquotaInterna()`/`comFcp()` — vencem a tabela para
+    produtos com alíquota diferenciada.
+- Enums `UF` (27), `IndicadorIntermediador` (NT 2020.006), `CstIcms`, `Csosn`,
+  `CstIpi`, `CstPisCofins` (com helpers de grupo `tributado()`/`exigeAliquota()`).
+- Testes: `ResolvedorAliquotasTest` (matriz interestadual e DIFAL contra a tabela
+  de referência) e `EnumsFiscaisTest` (cases = fonte única do contrato).
+
+### Quebrado (breaking)
+- **CST/CSOSN agora são enums** — `NfeTaxContext::icms(OrigemMercadoria, CstIcms|Csosn|null, …)`,
+  `st(ModoDeterminacaoBc, …)`, `ipi(CstIpi, …)`, `pis()/cofins()(CstPisCofins, …)`.
+  Combinação fora do contrato não compila; as allow-lists do `TaxEngine`
+  (`CSTS_SUPORTADOS` etc.) foram substituídas pelas cases dos enums (fonte única).
+- `pagamento(FormaPagamento $forma, …)` — sem união com string.
+- `intermediador(IndicadorIntermediador $indicador, ?string $cnpj = null)` — sem
+  validação de int na mão (indIntermed 2 = erro de tipo).
+- `Endereco::$uf` — `?UF` (era string livre).
+- `Pagamento::$forma` — `FormaPagamento` (helper `formaCodigo()` mantido).
+
+### Docs
+- `tabelas-aliquotas-fiscallib.md` §14 reescrita — descreve o que o resolvedor
+  realmente embute (era aspiracional).
+- `fiscal-rules.md` ganhou a seção "Alíquotas embutidas"; guia de integração
+  ganhou §5.6 com exemplos do resolvedor e overrides.
+
 ## [0.1.0] - 2026-09-07
 
 ### Base normativa

@@ -439,29 +439,34 @@ Para NFS-e Nacional:
 
 ## 14. O que a FiscalLib embute vs. o que o ERP fornece
 
-### A lib embute (constantes — não mudam por operação)
+Desde a v0.2.0 a lib embute os dados determinísticos em
+`FiscalLib\Tax\Tabelas\ResolvedorAliquotas` (puro, sem I/O) — o ERP o consulta
+ANTES de montar o `NfeTaxContext`:
 
-- Regras de alíquota interestadual (7%/12%/4%) por origem
-- Lógica de DIFAL (fórmula e partilha)
-- Alíquotas padrão PIS/COFINS por regime tributário
-- Alíquotas IRRF por tipo de serviço (IN 1.234/2012)
-- CSLL 1% e INSS 11%/3,5% com lógica de obrigatoriedade
-- Alíquotas de transição IBS/CBS 2026 (0,9%/0,1%)
-- Tabela de origem da mercadoria (orig 0–8) → faixa interestadual
-- Calendário de obrigatoriedade IBS/CBS por CRT
+- `aliquotaInterestadual(UF, UF, orig)` — 7%/12% por região (Res. Senado 22/1989)
+  e 4% para importadas/conteúdo > 40% (Res. Senado 13/2012) — §1
+- `parametrosDifal(UF, UF, orig)` — interestadual + interna geral + FCP do destino,
+  pronto para `NfeTaxContext::difalInterestadual()` — §2/§3/§4
+- `aliquotaInternaGeral(UF)` — regra geral do estado, **sem FCP** — §2
+- `aliquotaFcp(UF)` — adicional FCP/FECP por UF (null = sem) — §4
+- `aliquotasIbsCbs(2026)` — fase-teste LC 214/2025 (CBS 0,9 · IBS 0,05 + 0,05) — §11
 
-### O ERP deve fornecer (configurável por produto/serviço)
+**Overrides imutáveis** (`comAliquotaInterna`/`comFcp`) deixam o ERP vencer a
+tabela por produto. A interna geral é a regra do estado — produtos com alíquota
+diferenciada (bebidas 25–29%, medicamentos 0–12%, cesta básica 0–7% etc.)
+**exigem** o override; nunca responda o default para um item diferenciado.
 
-- Alíquota ICMS interna do estado do emitente para cada produto
+### O ERP continua fornecendo (configurável por produto/serviço — não embutido)
+
+- Alíquota ICMS interna específica do produto (diferenciada/benefício/cBenef)
 - Alíquota ICMS de ST para cada UF de destino (por protocolo ICMS)
 - MVA (Margem de Valor Agregado) por produto e UF destino
-- Alíquota de FCP por produto e UF
-- CST e CSOSN por produto
-- Código de benefício fiscal estadual (cBenef) quando aplicável
+- CST e CSOSN por produto (agora tipados: enums `CstIcms`/`Csosn`)
 - Alíquota ISS do município de incidência por serviço
-- Alíquota IPI por NCM
-- Alíquota IBS/CBS de referência por produto (CST/cClassTrib)
+- Alíquota IPI por NCM (tabela TIPI) e monofásicas PIS/COFINS por produto
+- Alíquotas IBS/CBS de exercícios pós-2026 (o resolvedor só embute a fase-teste)
 - Indicador de retenção de IRRF/CSLL/INSS por serviço
+- Catálogos de NCM, CEST, CFOP e códigos IBGE de município
 
 ---
 

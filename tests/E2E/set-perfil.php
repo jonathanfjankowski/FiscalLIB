@@ -12,6 +12,10 @@ require __DIR__ . '/../../vendor/autoload.php';
 use FiscalLib\Adapters\FiscalApi\ClienteHttp;
 use FiscalLib\Adapters\FiscalApi\GestaoFiscalApi;
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\OrigemMercadoria;
+use FiscalLib\Common\Enums\UF;
 use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\Documento\Destinatario;
@@ -98,7 +102,7 @@ $lib = FiscalLib::comFiscalApi(
 );
 
 $tributos = $lib->taxEngine()->calcularNfe(
-    NfeTaxContext::make()->valores(1, 100)->icms(0, cst: '00', aliquota: 18)
+    NfeTaxContext::make()->valores(1, 100)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
 );
 $doc = $lib->nfe()->novo()
     ->naturezaOperacao('Venda diagnostico integracao')
@@ -106,7 +110,7 @@ $doc = $lib->nfe()->novo()
         Cnpj::criar('45997418000153'),
         'Comprador Integracao LTDA',
         inscricaoEstadual: 'ISENTO',
-        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+        endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP, nomeMunicipio: 'São Paulo'),
     ))
     ->addItem(new ItemFiscal(
         codigo: 'SKU-DIAG',
@@ -118,7 +122,7 @@ $doc = $lib->nfe()->novo()
         ncm: '12345678',
         cfop: '5102',
     ))
-    ->pagamento('01', 100)
+    ->pagamento(FormaPagamento::Dinheiro, 100)
     ->build();
 
 $aceite = $lib->nfe()->emitirAsync($doc);

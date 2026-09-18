@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace FiscalLib\Tax;
 
 use FiscalLib\Common\ArredondadorBancario;
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\Csosn;
 use FiscalLib\Common\Matematica;
 use FiscalLib\Contracts\TaxEngineInterface;
 use FiscalLib\Exceptions\MissingFieldException;
@@ -27,20 +30,13 @@ use FiscalLib\Tax\Resultados\NfseTaxResultado;
  *
  * A aritmética espelha o ValidadorImpostosV2 da FiscalAPI (fonte da verdade):
  * todo valor = base × alíquota / 100, arredondamento bancário, tolerância 0,01.
- * CST/CSOSN fora do contrato (02, 15, 30, 53, 61, ICMSPart...) falham alto aqui —
- * a API rejeitaria com 422.
+ * CST/CSOSN são enums — combinação fora do contrato não compila; o que resta
+ * aqui é a validação de REGRAS (00 com redução, 20 sem redução, cst+csosn, etc.).
  */
 final class TaxEngine implements TaxEngineInterface
 {
-    private const CSTS_SUPORTADOS = ['00', '10', '20', '40', '41', '51', '60', '70', '90'];
-    private const CSOSNS_SUPORTADOS = ['101', '102', '103', '201', '202', '203', '300', '400', '500', '900'];
-
     public function calcularNfe(NfeTaxContext $ctx): NfeTaxResultado
     {
-        if ($ctx->origem < 0 || $ctx->origem > 8) {
-            throw new ValidationException("Origem da mercadoria ({$ctx->origem}) inválida — use 0 a 8.");
-        }
-
         return new NfeTaxResultado(
             icms: $this->calcularIcms($ctx),
             ipi: $this->calcularIpi($ctx),
@@ -114,38 +110,34 @@ final class TaxEngine implements TaxEngineInterface
 
     private function icmsPorCst(NfeTaxContext $ctx): IcmsResultado
     {
-        $cst = $ctx->cst ?? '';
-        if (! in_array($cst, self::CSTS_SUPORTADOS, true)) {
-            throw TaxInconsistencyException::combinacaoNaoSuportada(
-                "CST '{$cst}' fora do contrato (suporta 00/10/20/40/41/51/60/70/90; CST 02/15/30/53/61, ICMSPart e ICMSST não suportados)."
-            );
-        }
+        $cst = $ctx->cst;
+        \assert($cst !== null);
 
         $basePropria = $ctx->basePropria();
 
         switch ($cst) {
-            case '00':
+            case CstIcms::TributadaIntegralmente:
                 if ($ctx->percentualReducaoBc !== null) {
                     throw TaxInconsistencyException::combinacaoNaoSuportada('CST 00 não admite redução de BC — use CST 20.');
                 }
 
                 return $this->icmsTributado($ctx, $basePropria, null);
 
-            case '10':
+            case CstIcms::TributadaComCobrancaIcmsPorSt:
                 return $this->icmsTributado($ctx, $basePropria, $this->stPropria($ctx, $basePropria));
 
-            case '20':
+            case CstIcms::ComReducaoDeBaseDeCalculo:
                 if ($ctx->percentualReducaoBc === null) {
                     throw MissingFieldException::campo('percentualReducaoBc', 'CST 20');
                 }
 
                 return $this->icmsTributado($ctx, $ctx->baseComReducao(), null);
 
-            case '40':
-            case '41':
-                return new IcmsResultado(origem: $ctx->origem, cst: $cst);
+            case CstIcms::Isenta:
+            case CstIcms::NaoTributada:
+                return new IcmsResultado(origem: $ctx->origem->value, cst: $cst->value);
 
-            case '51':
+            case CstIcms::Diferimento:
                 if ($ctx->aliquotaIcms === null) {
                     throw MissingFieldException::campo('aliquotaIcms', 'CST 51 (diferimento)');
                 }
@@ -159,9 +151,9 @@ final class TaxEngine implements TaxEngineInterface
                 $valor = bccomp($percentualDif, '0', 2) === 0 ? $valorOperacao : null;
 
                 return new IcmsResultado(
-                    origem: $ctx->origem,
-                    cst: $cst,
-                    modBc: $ctx->modBc ?? '3',
+                    origem: $ctx->origem->value,
+                    cst: $cst->value,
+                    modBc: $ctx->modBc->value,
                     baseCalculo: $base,
                     aliquota: ArredondadorBancario::arredondar($ctx->aliquotaIcms, 4),
                     valor: $valor,
@@ -174,14 +166,14 @@ final class TaxEngine implements TaxEngineInterface
                     difal: $this->difalSeAplicavel($ctx, $base),
                 );
 
-            case '60':
+            case CstIcms::IcmsCobradoAnteriormentePorSt:
                 return new IcmsResultado(
-                    origem: $ctx->origem,
-                    cst: $cst,
+                    origem: $ctx->origem->value,
+                    cst: $cst->value,
                     st: $this->stRetida($ctx),
                 );
 
-            case '70':
+            case CstIcms::ComReducaoDeBaseECobrancaPorSt:
                 if ($ctx->percentualReducaoBc === null) {
                     throw MissingFieldException::campo('percentualReducaoBc', 'CST 70');
                 }
@@ -189,19 +181,16 @@ final class TaxEngine implements TaxEngineInterface
 
                 return $this->icmsTributado($ctx, $base, $this->stPropria($ctx, $base));
 
-            default:
-                throw new TaxCalculationException("CST {$cst} não tratado."); // @codeCoverageIgnore
-
-            case '90':
+            case CstIcms::Outros:
                 $base = $ctx->percentualReducaoBc !== null ? $ctx->baseComReducao() : $basePropria;
                 $st = $ctx->modBcSt !== null ? $this->stPropria($ctx, $base)
                     : ($ctx->baseCalculoStRetida !== null ? $this->stRetida($ctx) : null);
                 $trio = $ctx->aliquotaIcms !== null;
 
                 return new IcmsResultado(
-                    origem: $ctx->origem,
-                    cst: $cst,
-                    modBc: $trio ? ($ctx->modBc ?? '3') : null,
+                    origem: $ctx->origem->value,
+                    cst: $cst->value,
+                    modBc: $trio ? $ctx->modBc->value : null,
                     baseCalculo: $trio ? $base : null,
                     aliquota: $trio ? ArredondadorBancario::arredondar((string) $ctx->aliquotaIcms, 4) : null,
                     valor: $trio ? Matematica::percentualDe($base, (string) $ctx->aliquotaIcms) : null,
@@ -213,17 +202,16 @@ final class TaxEngine implements TaxEngineInterface
                     st: $st,
                     difal: $this->difalSeAplicavel($ctx, $base),
                 );
+
+            default:
+                throw new TaxCalculationException("CST {$cst->value} não tratado."); // @codeCoverageIgnore
         }
     }
 
     private function icmsPorCsosn(NfeTaxContext $ctx): IcmsResultado
     {
-        $csosn = $ctx->csosn ?? '';
-        if (! in_array($csosn, self::CSOSNS_SUPORTADOS, true)) {
-            throw TaxInconsistencyException::combinacaoNaoSuportada(
-                "CSOSN '{$csosn}' fora do contrato (suporta 101–900)."
-            );
-        }
+        $csosn = $ctx->csosn;
+        \assert($csosn !== null);
 
         $basePropria = $ctx->basePropria();
         $credito = $ctx->percentualCreditoSimples === null
@@ -231,55 +219,52 @@ final class TaxEngine implements TaxEngineInterface
             : Matematica::percentualDe($basePropria, $ctx->percentualCreditoSimples);
 
         switch ($csosn) {
-            case '101':
+            case Csosn::TributadaComPermissaoDeCredito:
                 if ($ctx->percentualCreditoSimples === null) {
                     throw MissingFieldException::campo('percentualCreditoSimples', 'CSOSN 101');
                 }
 
                 return new IcmsResultado(
-                    origem: $ctx->origem,
-                    csosn: $csosn,
+                    origem: $ctx->origem->value,
+                    csosn: $csosn->value,
                     percentualCreditoSimples: $ctx->percentualCreditoSimples,
                     valorCreditoSimples: $credito,
                 );
 
-            case '201':
+            case Csosn::TributadaComPermissaoDeCreditoECobrancaPorSt:
                 return new IcmsResultado(
-                    origem: $ctx->origem,
-                    csosn: $csosn,
+                    origem: $ctx->origem->value,
+                    csosn: $csosn->value,
                     percentualCreditoSimples: $ctx->percentualCreditoSimples,
                     valorCreditoSimples: $credito,
                     st: $this->stPropria($ctx, $basePropria),
                 );
 
-            case '202':
-            case '203':
-                return new IcmsResultado(origem: $ctx->origem, csosn: $csosn, st: $this->stPropria($ctx, $basePropria));
+            case Csosn::TributadaSemPermissaoDeCreditoECobrancaPorSt:
+            case Csosn::IsencaoFaixaReceitaECobrancaPorSt:
+                return new IcmsResultado(origem: $ctx->origem->value, csosn: $csosn->value, st: $this->stPropria($ctx, $basePropria));
 
-            case '300':
-            case '400':
-                return new IcmsResultado(origem: $ctx->origem, csosn: $csosn);
+            case Csosn::Imune:
+            case Csosn::SemIncidencia:
+                return new IcmsResultado(origem: $ctx->origem->value, csosn: $csosn->value);
 
-            case '500':
-                return new IcmsResultado(origem: $ctx->origem, csosn: $csosn, st: $this->stRetida($ctx));
+            case Csosn::IcmsCobradoAnteriormentePorSt:
+                return new IcmsResultado(origem: $ctx->origem->value, csosn: $csosn->value, st: $this->stRetida($ctx));
 
-            default:
-                throw new TaxCalculationException("CSOSN {$csosn} não tratado."); // @codeCoverageIgnore
+            case Csosn::TributadaSemPermissaoDeCredito:
+            case Csosn::IsencaoIcmsParaFaixaDeReceitaBruta:
+                return new IcmsResultado(origem: $ctx->origem->value, csosn: $csosn->value);
 
-            case '102':
-            case '103':
-                return new IcmsResultado(origem: $ctx->origem, csosn: $csosn);
-
-            case '900':
+            case Csosn::Outros:
                 $base = $ctx->percentualReducaoBc !== null ? $ctx->baseComReducao() : $basePropria;
                 $st = $ctx->modBcSt !== null ? $this->stPropria($ctx, $base)
                     : ($ctx->baseCalculoStRetida !== null ? $this->stRetida($ctx) : null);
                 $trio = $ctx->aliquotaIcms !== null;
 
                 return new IcmsResultado(
-                    origem: $ctx->origem,
-                    csosn: $csosn,
-                    modBc: $trio ? ($ctx->modBc ?? '3') : null,
+                    origem: $ctx->origem->value,
+                    csosn: $csosn->value,
+                    modBc: $trio ? $ctx->modBc->value : null,
                     baseCalculo: $trio ? $base : null,
                     aliquota: $trio ? ArredondadorBancario::arredondar((string) $ctx->aliquotaIcms, 4) : null,
                     valor: $trio ? Matematica::percentualDe($base, (string) $ctx->aliquotaIcms) : null,
@@ -291,6 +276,9 @@ final class TaxEngine implements TaxEngineInterface
                     st: $st,
                     difal: $this->difalSeAplicavel($ctx, $base),
                 );
+
+            default:
+                throw new TaxCalculationException("CSOSN {$csosn->value} não tratado."); // @codeCoverageIgnore
         }
     }
 
@@ -307,9 +295,9 @@ final class TaxEngine implements TaxEngineInterface
         }
 
         return new IcmsResultado(
-            origem: $ctx->origem,
-            cst: $ctx->cst,
-            modBc: $ctx->modBc ?? '3',
+            origem: $ctx->origem->value,
+            cst: $ctx->cst?->value,
+            modBc: $ctx->modBc->value,
             baseCalculo: $base,
             aliquota: ArredondadorBancario::arredondar($ctx->aliquotaIcms, 4),
             valor: Matematica::percentualDe($base, $ctx->aliquotaIcms),
@@ -336,7 +324,7 @@ final class TaxEngine implements TaxEngineInterface
         }
 
         return new IcmsStResultado(
-            modBcSt: $ctx->modBcSt,
+            modBcSt: $ctx->modBcSt->value,
             percentualMva: $this->pct($ctx->percentualMva),
             percentualReducaoBcSt: $this->pct($ctx->percentualReducaoBcSt),
             baseCalculoSt: $baseSt,
@@ -402,19 +390,18 @@ final class TaxEngine implements TaxEngineInterface
 
     private function calcularIpi(NfeTaxContext $ctx): ?ImpostoTrioResultado
     {
-        if ($ctx->cstIpi === null) {
+        $cst = $ctx->cstIpi;
+        if ($cst === null) {
             return null;
         }
 
-        $cst = $ctx->cstIpi;
-
-        if (in_array($cst, ['00', '49', '50', '99'], true)) {
+        if ($cst->tributado()) {
             if ($ctx->aliquotaIpi === null) {
-                throw MissingFieldException::campo('aliquotaIpi', "IPI CST {$cst}");
+                throw MissingFieldException::campo('aliquotaIpi', "IPI CST {$cst->value}");
             }
 
             return new ImpostoTrioResultado(
-                cst: $cst,
+                cst: $cst->value,
                 baseCalculo: $ctx->basePropria(),
                 aliquota: ArredondadorBancario::arredondar($ctx->aliquotaIpi, 4),
                 valor: Matematica::percentualDe($ctx->basePropria(), $ctx->aliquotaIpi),
@@ -422,54 +409,42 @@ final class TaxEngine implements TaxEngineInterface
             );
         }
 
-        if (in_array($cst, ['01', '02', '03', '04', '05', '51'], true)) {
-            return new ImpostoTrioResultado(cst: $cst, cEnq: $ctx->cEnqIpi);
-        }
-
-        throw TaxInconsistencyException::combinacaoNaoSuportada("IPI CST '{$cst}' fora do contrato (00, 01–05, 49, 50, 51, 99).");
+        return new ImpostoTrioResultado(cst: $cst->value, cEnq: $ctx->cEnqIpi);
     }
 
-    private function calcularPisCofins(?string $cst, ?string $aliquota, NfeTaxContext $ctx): ?ImpostoTrioResultado
+    private function calcularPisCofins(?CstPisCofins $cst, ?string $aliquota, NfeTaxContext $ctx): ?ImpostoTrioResultado
     {
         if ($cst === null) {
             return null;
         }
 
-        if ($cst === '03') {
-            throw TaxInconsistencyException::combinacaoNaoSuportada('PIS/COFINS CST 03 (por quantidade) não suportado no contrato atual.');
-        }
-
-        if (in_array($cst, ['01', '02'], true)) {
+        if ($cst->exigeAliquota()) {
             if ($aliquota === null) {
-                throw MissingFieldException::campo('aliquota', "PIS/COFINS CST {$cst}");
+                throw MissingFieldException::campo('aliquota', "PIS/COFINS CST {$cst->value}");
             }
 
             return new ImpostoTrioResultado(
-                cst: $cst,
+                cst: $cst->value,
                 baseCalculo: $ctx->basePropria(),
                 aliquota: ArredondadorBancario::arredondar($aliquota, 4),
                 valor: Matematica::percentualDe($ctx->basePropria(), $aliquota),
             );
         }
 
-        if (in_array($cst, ['04', '05', '06', '07', '08', '09'], true)) {
-            return new ImpostoTrioResultado(cst: $cst);
-        }
-
-        if ($cst === '99') {
+        if ($cst->admiteAliquotaOpcional()) {
             if ($aliquota === null) {
-                return new ImpostoTrioResultado(cst: $cst);
+                return new ImpostoTrioResultado(cst: $cst->value);
             }
 
             return new ImpostoTrioResultado(
-                cst: $cst,
+                cst: $cst->value,
                 baseCalculo: $ctx->basePropria(),
                 aliquota: ArredondadorBancario::arredondar($aliquota, 4),
                 valor: Matematica::percentualDe($ctx->basePropria(), $aliquota),
             );
         }
 
-        throw TaxInconsistencyException::combinacaoNaoSuportada("PIS/COFINS CST '{$cst}' fora do contrato (01, 02, 04–09, 99).");
+        return new ImpostoTrioResultado(cst: $cst->value);
     }
 
     // -------------------------------------------------------------- Reforma

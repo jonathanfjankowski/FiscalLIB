@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FiscalLib\Tests\Port;
 
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\FormaPagamento;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\Contracts\OpcoesEmissao;
 use FiscalLib\Documento\ItemFiscal;
@@ -30,7 +31,7 @@ final class FiscalLibFluxoTest extends TestCase
             ->serie(1)
             ->naturezaOperacao('Venda de mercadoria')
             ->addItem(new ItemFiscal('SKU1', 'Produto', '1.0000', '100.00', '100.00'))
-            ->pagamento('01', 100)
+            ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
     }
 

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace FiscalLib\Tax\Contextos;
 
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstIpi;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\Csosn;
+use FiscalLib\Common\Enums\ModoDeterminacaoBc;
 use FiscalLib\Common\Enums\OrigemMercadoria;
 use FiscalLib\Common\Enums\RegimeTributario;
 use FiscalLib\Common\Matematica;
@@ -11,6 +16,10 @@ use FiscalLib\Common\Matematica;
 /**
  * Contexto tributário de UM item de NF-e/NFC-e (fluent via make()).
  * A lib calcula e devolve valores prontos — a API valida a aritmética.
+ *
+ * Códigos fiscais são enums: CST/CSOSN fora do contrato não compilam
+ * (falha de tipo, não de runtime). Alíquotas continuam sendo entrada do ERP —
+ * use ResolvedorAliquotas (src/Tax/Tabelas) para os defaults embutidos.
  */
 final class NfeTaxContext
 {
@@ -23,17 +32,17 @@ final class NfeTaxContext
     public string $valorUnitario = '0.00';
 
     // ICMS
-    public int $origem = 0;
-    public ?string $cst = null;               // regime normal (00–90 suportados)
-    public ?string $csosn = null;             // Simples Nacional (101–900)
-    public ?string $modBc = null;             // default '3'
+    public OrigemMercadoria $origem = OrigemMercadoria::Nacional;
+    public ?CstIcms $cst = null;              // regime normal
+    public ?Csosn $csosn = null;              // Simples Nacional
+    public ModoDeterminacaoBc $modBc = ModoDeterminacaoBc::ValorOperacao;
     public ?string $aliquotaIcms = null;
     public ?string $percentualReducaoBc = null;
     public ?string $aliquotaFcp = null;
     public ?string $percentualCreditoSimples = null;
 
     // ST própria
-    public ?string $modBcSt = null;
+    public ?ModoDeterminacaoBc $modBcSt = null;
     public ?string $percentualMva = null;
     public ?string $percentualReducaoBcSt = null;
     public ?string $aliquotaIcmsSt = null;
@@ -57,14 +66,14 @@ final class NfeTaxContext
     public ?string $aliquotaFcpUfDestino = null;
 
     // IPI
-    public ?string $cstIpi = null;
+    public ?CstIpi $cstIpi = null;
     public string $cEnqIpi = '999';
     public ?string $aliquotaIpi = null;
 
     // PIS/COFINS
-    public ?string $cstPis = null;
+    public ?CstPisCofins $cstPis = null;
     public ?string $aliquotaPis = null;
-    public ?string $cstCofins = null;
+    public ?CstPisCofins $cstCofins = null;
     public ?string $aliquotaCofins = null;
 
     // Reforma
@@ -111,18 +120,21 @@ final class NfeTaxContext
         return $this;
     }
 
+    /**
+     * ICMS próprio. O tipo do parâmetro $cst seleciona o regime:
+     * CstIcms (regime normal) ou Csosn (Simples Nacional) — nunca os dois.
+     */
     public function icms(
-        string|int $origem,
-        ?string $cst = null,
-        ?string $csosn = null,
+        OrigemMercadoria $origem,
+        CstIcms|Csosn|null $cst = null,
         string|int|float|null $aliquota = null,
-        ?string $modBc = '3',
+        ModoDeterminacaoBc $modBc = ModoDeterminacaoBc::ValorOperacao,
         string|int|float|null $reducaoBc = null,
         string|int|float|null $fcp = null,
     ): self {
-        $this->origem = (int) $origem;
-        $this->cst = $cst;
-        $this->csosn = $csosn;
+        $this->origem = $origem;
+        $this->cst = $cst instanceof CstIcms ? $cst : null;
+        $this->csosn = $cst instanceof Csosn ? $cst : null;
         $this->modBc = $modBc;
         $this->aliquotaIcms = $aliquota === null ? null : Matematica::normalizar($aliquota);
         $this->percentualReducaoBc = $reducaoBc === null ? null : Matematica::normalizar($reducaoBc);
@@ -132,7 +144,7 @@ final class NfeTaxContext
     }
 
     public function st(
-        string $modBcSt,
+        ModoDeterminacaoBc $modBcSt,
         string|int|float|null $mva = null,
         string|int|float|null $aliquotaSt = null,
         string|int|float|null $reducaoBcSt = null,
@@ -175,6 +187,7 @@ final class NfeTaxContext
         return $this;
     }
 
+    /** Use ResolvedorAliquotas::parametrosDifal() para preencher os três parâmetros. */
     public function difalInterestadual(
         int $aliquotaInterestadual,
         string|int|float $aliquotaInternaUfDestino,
@@ -188,7 +201,7 @@ final class NfeTaxContext
         return $this;
     }
 
-    public function ipi(string $cst, string|int|float|null $aliquota = null, string $cEnq = '999'): self
+    public function ipi(CstIpi $cst, string|int|float|null $aliquota = null, string $cEnq = '999'): self
     {
         $this->cstIpi = $cst;
         $this->aliquotaIpi = $aliquota === null ? null : Matematica::normalizar($aliquota);
@@ -197,7 +210,7 @@ final class NfeTaxContext
         return $this;
     }
 
-    public function pis(string $cst, ?string $aliquota = null): self
+    public function pis(CstPisCofins $cst, string|int|float|null $aliquota = null): self
     {
         $this->cstPis = $cst;
         $this->aliquotaPis = $aliquota === null ? null : Matematica::normalizar($aliquota);
@@ -205,7 +218,7 @@ final class NfeTaxContext
         return $this;
     }
 
-    public function cofins(string $cst, ?string $aliquota = null): self
+    public function cofins(CstPisCofins $cst, string|int|float|null $aliquota = null): self
     {
         $this->cstCofins = $cst;
         $this->aliquotaCofins = $aliquota === null ? null : Matematica::normalizar($aliquota);

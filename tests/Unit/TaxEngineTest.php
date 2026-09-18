@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace FiscalLib\Tests\Unit;
 
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstIpi;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\Csosn;
+use FiscalLib\Common\Enums\ModoDeterminacaoBc;
+use FiscalLib\Common\Enums\OrigemMercadoria;
 use FiscalLib\Exceptions\MissingFieldException;
-use FiscalLib\Exceptions\TaxInconsistencyException;
+use FiscalLib\Exceptions\ValidationException;
 use FiscalLib\Tax\Contextos\IbsCbsEntrada;
 use FiscalLib\Tax\Contextos\IsEntrada;
 use FiscalLib\Tax\Contextos\NfeTaxContext;
@@ -34,7 +40,7 @@ final class TaxEngineTest extends TestCase
     public function testCst00TributadaIntegralComFcp(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 18, fcp: 2)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18, fcp: 2)
         );
 
         self::assertSame('1000.00', $r->icms->baseCalculo);
@@ -42,25 +48,27 @@ final class TaxEngineTest extends TestCase
         self::assertSame('180.00', $r->icms->valor);
         self::assertSame('2.0000', $r->icms->fcpPercentual);
         self::assertSame('20.00', $r->icms->valorFcp);
+        self::assertSame(0, $r->icms->origem);
     }
 
     public function testCst10ComStMva(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '10', aliquota: 18)
-                ->st(modBcSt: '4', mva: 30, aliquotaSt: 18)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaComCobrancaIcmsPorSt, aliquota: 18)
+                ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 30, aliquotaSt: 18)
         );
 
         // BC_ST = 1000 × 1,30 = 1300; vICMSST = 1300 × 18% = 234 (fórmula direta da API)
         self::assertSame('180.00', $r->icms->valor);
         self::assertSame('1300.00', $r->icms->st->baseCalculoSt);
         self::assertSame('234.00', $r->icms->st->valorSt);
+        self::assertSame('4', $r->icms->st->modBcSt);
     }
 
     public function testCst20ComReducaoBc(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '20', aliquota: 18, reducaoBc: 10)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::ComReducaoDeBaseDeCalculo, aliquota: 18, reducaoBc: 10)
         );
 
         self::assertSame('900.00', $r->icms->baseCalculo);
@@ -70,7 +78,7 @@ final class TaxEngineTest extends TestCase
 
     public function testCst41Isenta(): void
     {
-        $r = $this->engine->calcularNfe($this->contexto()->icms(0, cst: '41'));
+        $r = $this->engine->calcularNfe($this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::NaoTributada));
 
         self::assertNull($r->icms->valor);
         self::assertNull($r->icms->baseCalculo);
@@ -79,7 +87,7 @@ final class TaxEngineTest extends TestCase
     public function testCst51DiferimentoOmiteValor(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '51', aliquota: 12)->diferimento(50)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::Diferimento, aliquota: 12)->diferimento(50)
         );
 
         // valorIcmsOperacao = 120; diferido = 60; `valor` OMITIDO
@@ -93,7 +101,7 @@ final class TaxEngineTest extends TestCase
     public function testCst60StRetida(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '60')->stRetida(1000, 18)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::IcmsCobradoAnteriormentePorSt)->stRetida(1000, 18)
         );
 
         self::assertSame('1000.00', $r->icms->st->baseCalculoStRetido);
@@ -104,8 +112,8 @@ final class TaxEngineTest extends TestCase
     public function testCst70ReducaoMaisSt(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '70', aliquota: 18, reducaoBc: 10)
-                ->st(modBcSt: '4', mva: 30, aliquotaSt: 18)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::ComReducaoDeBaseECobrancaPorSt, aliquota: 18, reducaoBc: 10)
+                ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 30, aliquotaSt: 18)
         );
 
         // Própria: base reduzida 900 → 162. ST: semente = base reduzida 900 × 1,3 = 1170 → 210,60
@@ -115,9 +123,17 @@ final class TaxEngineTest extends TestCase
         self::assertSame('210.60', $r->icms->st->valorSt);
     }
 
+    public function testCst00ComReducaoFalha(): void
+    {
+        $this->expectException(\FiscalLib\Exceptions\TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18, reducaoBc: 10)
+        );
+    }
+
     public function testCsosn102SimplesSemValores(): void
     {
-        $r = $this->engine->calcularNfe($this->contexto()->icms(0, csosn: '102'));
+        $r = $this->engine->calcularNfe($this->contexto()->icms(OrigemMercadoria::Nacional, Csosn::TributadaSemPermissaoDeCredito));
 
         self::assertSame('102', $r->icms->csosn);
         self::assertNull($r->icms->valor);
@@ -126,7 +142,7 @@ final class TaxEngineTest extends TestCase
     public function testCsosn101ComCredito(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, csosn: '101')->creditoSimples(2.5)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, Csosn::TributadaComPermissaoDeCredito)->creditoSimples(2.5)
         );
 
         self::assertSame('25.00', $r->icms->valorCreditoSimples);
@@ -135,8 +151,8 @@ final class TaxEngineTest extends TestCase
     public function testCsosn201ComSt(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, csosn: '201')->creditoSimples(2.5)
-                ->st(modBcSt: '4', mva: 30, aliquotaSt: 18)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, Csosn::TributadaComPermissaoDeCreditoECobrancaPorSt)->creditoSimples(2.5)
+                ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 30, aliquotaSt: 18)
         );
 
         self::assertSame('25.00', $r->icms->valorCreditoSimples);
@@ -148,7 +164,7 @@ final class TaxEngineTest extends TestCase
         // Cenário coerente: PR→BA, interestadual 7% (ICMS próprio remete 7% à
         // UF de origem), interna do destino 18%, FCP destino 2%.
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 7)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 7)
                 ->difalInterestadual(7, aliquotaInternaUfDestino: 18, fcpUfDestino: 2)
         );
 
@@ -165,19 +181,19 @@ final class TaxEngineTest extends TestCase
 
     public function testDifalAliquotaInvalidaFalha(): void
     {
-        $this->expectException(\FiscalLib\Exceptions\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 12)->difalInterestadual(9, 18)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 12)->difalInterestadual(9, 18)
         );
     }
 
     public function testIpiETributosFederais(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 18)
-                ->ipi('50', aliquota: 10)
-                ->pis('01', '1.65')
-                ->cofins('01', '7.60')
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
+                ->ipi(CstIpi::SaidaTributada, aliquota: 10)
+                ->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')
+                ->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')
         );
 
         self::assertSame('100.00', $r->ipi->valor);
@@ -189,17 +205,29 @@ final class TaxEngineTest extends TestCase
     public function testPisCofinsIsentos(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 18)->pis('07')->cofins('07')
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
+                ->pis(CstPisCofins::OperacaoIsenta)
+                ->cofins(CstPisCofins::OperacaoIsenta)
         );
 
         self::assertNull($r->pis->valor);
         self::assertNull($r->cofins->valor);
     }
 
+    public function testPisCofins99ComAliquotaOpcional(): void
+    {
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
+                ->pis(CstPisCofins::OutrasOperacoes, '2.00')
+        );
+
+        self::assertSame('20.00', $r->pis->valor);
+    }
+
     public function testIbsCbsPorFora(): void
     {
         $r = $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 18)
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
                 ->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.9, aliquotaCbs: 0.1))
         );
 
@@ -211,7 +239,7 @@ final class TaxEngineTest extends TestCase
 
     public function testIsPorQuantidade(): void
     {
-        $ctx = $this->contexto()->icms(0, cst: '00', aliquota: 18)
+        $ctx = $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
             ->is(IsEntrada::porQuantidade('01', '000001', 1.0, baseCalculo: 500, unidadeTributavel: 'L', quantidadeTributavel: 500));
 
         $r = $this->engine->calcularNfe($ctx);
@@ -221,31 +249,17 @@ final class TaxEngineTest extends TestCase
         self::assertSame('L', $r->is->unidadeTributavel);
     }
 
-    public function testCst30NaoSuportadoFalhaAlto(): void
-    {
-        $this->expectException(TaxInconsistencyException::class);
-        $this->engine->calcularNfe($this->contexto()->icms(0, cst: '30', aliquota: 18));
-    }
-
-    public function testPis03NaoSuportado(): void
-    {
-        $this->expectException(TaxInconsistencyException::class);
-        $this->engine->calcularNfe(
-            $this->contexto()->icms(0, cst: '00', aliquota: 18)->pis('03', '1')
-        );
-    }
-
     public function testCst00SemAliquotaFalha(): void
     {
         $this->expectException(MissingFieldException::class);
-        $this->engine->calcularNfe($this->contexto()->icms(0, cst: '00'));
+        $this->engine->calcularNfe($this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente));
     }
 
     public function testArredondamentoBancarioNoCalculo(): void
     {
         // 10.00 × 0.05% = 0.005 → bancário = 0.00
         $r = $this->engine->calcularNfe(
-            NfeTaxContext::make()->valores(1, 10)->icms(0, cst: '00', aliquota: 0.05)
+            NfeTaxContext::make()->valores(1, 10)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 0.05)
         );
 
         self::assertSame('0.00', $r->icms->valor);

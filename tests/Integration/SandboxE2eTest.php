@@ -6,7 +6,13 @@ namespace FiscalLib\Tests\Integration;
 
 use FiscalLib\Adapters\FiscalApi\MapeadorDocumento;
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\CstIpi;
+use FiscalLib\Common\Enums\CstPisCofins;
+use FiscalLib\Common\Enums\FormaPagamento;
 use FiscalLib\Common\Enums\ModeloDocumento;
+use FiscalLib\Common\Enums\OrigemMercadoria;
+use FiscalLib\Common\Enums\UF;
 use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\Contracts\OpcoesEmissao;
@@ -132,12 +138,13 @@ final class SandboxE2eTest extends TestCase
         // Tenant em regime normal (Inova Simples é forma jurídica, não optante
         // do Simples Nacional) — NFC-e usa CST, não CSOSN. Alíquota interna PR.
         $tributos = self::$lib->taxEngine()->calcularNfe(
-            NfeTaxContext::make()->valores(1, 25.50)->icms(0, cst: '00', aliquota: 18)
+            NfeTaxContext::make()->valores(1, 25.50)
+                ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
         );
         $documento = self::$lib->nfce()->novo()
             ->naturezaOperacao('Venda balcao integracao')
             ->addItem(self::item(1, 25.50, $tributos, '5102')) // NFC-e é sempre operação interna
-            ->pagamento('01', 25.50)
+            ->pagamento(FormaPagamento::Dinheiro, 25.50)
             ->build();
 
         $resultado = self::$lib->nfce()->emitir($documento);
@@ -162,9 +169,12 @@ final class SandboxE2eTest extends TestCase
     public function testNfeCompletaTotaisV2PdfECancelamento(): void
     {
         $tributos = self::$lib->taxEngine()->calcularNfe(
-            NfeTaxContext::make()->valores(3, 40)->icms(0, cst: '00', aliquota: 12, fcp: 2)
-                ->ipi('50', aliquota: 5)
-                ->pis('01', '1.65')->cofins('01', '7.60')->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
+            NfeTaxContext::make()->valores(3, 40)
+                ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 12, fcp: 2)
+                ->ipi(CstIpi::SaidaTributada, aliquota: 5)
+                ->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')
+                ->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')
+                ->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
         );
         $documento = self::$lib->nfe()->novo()
             ->naturezaOperacao('Venda de mercadoria integracao')
@@ -172,11 +182,11 @@ final class SandboxE2eTest extends TestCase
                 Cnpj::criar('45997418000153'),
                 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL',
                 inscricaoEstadual: '110042490114',
-                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP, nomeMunicipio: 'São Paulo'),
             ))
             ->addItem(self::item(3, 40, $tributos, '6102'))
             ->frete(15)
-            ->pagamento('03', 141)
+            ->pagamento(FormaPagamento::CartaoCredito, 141)
             ->build();
 
         // Fórmula v2: 120 brutos + 15 frete + 6 IPI (5% de 120)
@@ -231,7 +241,7 @@ final class SandboxE2eTest extends TestCase
             ->tomador(new Tomador(
                 Cnpj::criar('45997418000153'),
                 'Tomador Integracao LTDA',
-                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP, nomeMunicipio: 'São Paulo'),
             ))
             ->servico(new ServicoFiscal('010701', 'Desenvolvimento de software integracao', codigoNbs: '112011000'))
             ->tributos($tributos)
@@ -289,7 +299,11 @@ final class SandboxE2eTest extends TestCase
     private static function nfeSimples(): NfeDocumento
     {
         $tributos = self::$lib->taxEngine()->calcularNfe(
-            NfeTaxContext::make()->valores(1, 100)->icms(0, cst: '00', aliquota: 12)->pis('01', '1.65')->cofins('01', '7.60')->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
+            NfeTaxContext::make()->valores(1, 100)
+                ->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 12)
+                ->pis(CstPisCofins::OperacaoTributavelCumulativo, '1.65')
+                ->cofins(CstPisCofins::OperacaoTributavelCumulativo, '7.60')
+                ->ibsCbs(IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: 0.1, aliquotaCbs: 0.9))
         );
 
         return self::$lib->nfe()->novo()
@@ -298,10 +312,10 @@ final class SandboxE2eTest extends TestCase
                 Cnpj::criar('45997418000153'),
                 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL',
                 inscricaoEstadual: '110042490114',
-                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: 'SP', nomeMunicipio: 'São Paulo'),
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP, nomeMunicipio: 'São Paulo'),
             ))
             ->addItem(self::item(1, 100, $tributos, '6102'))
-            ->pagamento('01', 100)
+            ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
     }
 

@@ -11,6 +11,9 @@ require __DIR__ . '/../../vendor/autoload.php';
 
 use FiscalLib\Adapters\FiscalApi\ClienteHttp;
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\CstIcms;
+use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\OrigemMercadoria;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\Documento\ItemFiscal;
 use FiscalLib\FiscalLib;
@@ -88,7 +91,7 @@ $lib = FiscalLib::comFiscalApi(
 );
 
 $tributos = $lib->taxEngine()->calcularNfe(
-    NfeTaxContext::make()->valores(1, 25.50)->icms(0, cst: '00', aliquota: 18)
+    NfeTaxContext::make()->valores(1, 25.50)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
 );
 $nfce = $lib->nfce()->novo()
     ->naturezaOperacao('Venda balcao diagnostico')
@@ -102,7 +105,7 @@ $nfce = $lib->nfce()->novo()
         ncm: '84714900',
         cfop: '5102',
     ))
-    ->pagamento('01', 25.50)
+    ->pagamento(FormaPagamento::Dinheiro, 25.50)
     ->build();
 
 $aceite = $lib->nfce()->emitirAsync($nfce);

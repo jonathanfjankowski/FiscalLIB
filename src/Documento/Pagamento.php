@@ -12,13 +12,13 @@ use FiscalLib\Common\Enums\FormaPagamento;
 final class Pagamento
 {
     public function __construct(
-        public readonly FormaPagamento|string $forma,
+        public readonly FormaPagamento $forma,
         public readonly string $valor,
     ) {
     }
 
     public function formaCodigo(): string
     {
-        return $this->forma instanceof FormaPagamento ? $this->forma->value : $this->forma;
+        return $this->forma->value;
     }
 }

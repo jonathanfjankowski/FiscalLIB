@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace FiscalLib\Tests\Unit;
 
 use FiscalLib\Common\Enums\Ambiente;
+use FiscalLib\Common\Enums\FormaPagamento;
 use FiscalLib\Common\Enums\IndicadorConsumidorFinal;
+use FiscalLib\Common\Enums\IndicadorIntermediador;
 use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Documento\Destinatario;
 use FiscalLib\Documento\ItemFiscal;
@@ -47,7 +49,7 @@ final class NfeBuilderTest extends TestCase
             ->naturezaOperacao('Venda de mercadoria')
             ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
             ->addItem($this->item(tributos: $this->icms00()))
-            ->pagamento('01', 100)
+            ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
 
         self::assertSame(100.0, (float) $doc->totais->valorNota);
@@ -62,13 +64,13 @@ final class NfeBuilderTest extends TestCase
             ->ambiente(Ambiente::Homologacao)
             ->serie(1)
             ->naturezaOperacao('Venda via marketplace')
-            ->intermediador(1, '45.997.418/0001-53')
+            ->intermediador(IndicadorIntermediador::PlataformaTerceiros, '45.997.418/0001-53')
             ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
             ->addItem($this->item(tributos: $this->icms00()))
-            ->pagamento('01', 100)
+            ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
 
-        self::assertSame(1, $doc->indicadorIntermediador);
+        self::assertSame(IndicadorIntermediador::PlataformaTerceiros, $doc->indicadorIntermediador);
         self::assertSame('45997418000153', $doc->cnpjIntermediador);
     }
 
@@ -80,7 +82,7 @@ final class NfeBuilderTest extends TestCase
             ->naturezaOperacao('Venda direta')
             ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
             ->addItem($this->item(tributos: $this->icms00()))
-            ->pagamento('01', 100)
+            ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
 
         $payload = (new \FiscalLib\Adapters\FiscalApi\MapeadorDocumento())->paraEmissaoRequest($doc);
@@ -88,16 +90,10 @@ final class NfeBuilderTest extends TestCase
         self::assertArrayNotHasKey('indicadorIntermediador', $payload);
     }
 
-    public function testIntermediadorIndicadorInvalidoFalha(): void
-    {
-        $this->expectException(ValidationException::class);
-        NfeBuilder::nfe()->intermediador(2);
-    }
-
     public function testIntermediadorSemCnpjFalha(): void
     {
         $this->expectException(ValidationException::class);
-        NfeBuilder::nfe()->intermediador(1);
+        NfeBuilder::nfe()->intermediador(IndicadorIntermediador::PlataformaTerceiros);
     }
 
     public function testSemNaturezaOperacaoFalha(): void
@@ -163,7 +159,7 @@ final class NfeBuilderTest extends TestCase
             ->serie(1)
             ->naturezaOperacao('Venda balcão')
             ->addItem($this->item(quantidade: 1, unitario: 10500))
-            ->pagamento('01', 10500)
+            ->pagamento(FormaPagamento::Dinheiro, 10500)
             ->build();
     }
 
@@ -189,7 +185,7 @@ final class NfeBuilderTest extends TestCase
             ->serie(1)
             ->naturezaOperacao('Venda balcão')
             ->addItem($this->item(tributos: $tributos))
-            ->pagamento('01', 100)
+            ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
     }
 
@@ -200,7 +196,7 @@ final class NfeBuilderTest extends TestCase
             ->serie(1)
             ->naturezaOperacao('Venda balcão')
             ->addItem($this->item())
-            ->pagamento('01', 50)
+            ->pagamento(FormaPagamento::Dinheiro, 50)
             ->build();
     }
 
