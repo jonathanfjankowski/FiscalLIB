@@ -39,6 +39,9 @@ interface EmissorInterface
     /** DANFE/PDF do documento (autorizado ou cancelado). */
     public function baixarPdf(string $documentoId, bool $emBase64 = false): \FiscalLib\Documento\ArquivoPdf;
 
+    /** XML do evento fiscal (cancelamento/CC-e/inutilização) já protocolado. */
+    public function baixarXmlEvento(string $documentoId, string $eventoId): string;
+
     /**
      * Substituição de NFS-e autorizada (o DPS substituído vira a nova nota).
      * cMotivo 1–5 e 99 (99 exige xMotivo).

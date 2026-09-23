@@ -79,6 +79,11 @@ class EmissorFake implements EmissorInterface
         return new ArquivoPdf('%PDF-1.4 fake');
     }
 
+    public function baixarXmlEvento(string $documentoId, string $eventoId): string
+    {
+        return '<?xml version="1.0"?> <evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"/>';
+    }
+
     public function substituir(string $documentoId, NfseDocumento $substituta, int $cMotivo, ?string $xMotivo = null, ?OpcoesEmissao $opcoes = null): AceiteEmissao
     {
         return new AceiteEmissao('doc-2', 'PENDENTE');

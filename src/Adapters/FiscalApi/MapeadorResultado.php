@@ -66,6 +66,7 @@ final class MapeadorResultado
             documentoId: isset($dados['documentoId']) ? (string) $dados['documentoId'] : $documentoId,
             criadoEm: isset($dados['criadoEm']) ? (string) $dados['criadoEm'] : null,
             motivoStatus: isset($dados['motivoStatus']) ? (string) $dados['motivoStatus'] : null,
+            xml: isset($dados['xml']) ? (string) $dados['xml'] : (isset($dados['xmlEvento']) ? (string) $dados['xmlEvento'] : null),
             raw: $dados,
         );
     }

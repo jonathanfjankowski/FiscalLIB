@@ -140,6 +140,14 @@ final class EmissorFiscalApi implements EmissorInterface
         return new ArquivoPdf($conteudo, false, $contentType);
     }
 
+    public function baixarXmlEvento(string $documentoId, string $eventoId): string
+    {
+        $caminho = "/v1/documentos-fiscais/{$this->idSeguro($documentoId)}/eventos/{$this->idSeguro($eventoId)}/xml";
+        [$conteudo] = $this->http->getBinario($caminho);
+
+        return $conteudo;
+    }
+
     public function substituir(
         string $documentoId,
         NfseDocumento $substituta,

@@ -16,6 +16,7 @@ final class ResultadoEvento
         public readonly ?string $documentoId = null,
         public readonly ?string $criadoEm = null,
         public readonly ?string $motivoStatus = null,
+        public readonly ?string $xml = null,
         public readonly ?array $raw = null,
     ) {
     }

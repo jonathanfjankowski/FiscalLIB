@@ -39,4 +39,10 @@ final class ServicoEventos
     {
         return $this->emissor->consultarInutilizacao($eventoId);
     }
+
+    /** XML do evento (cancelamento/CC-e) já protocolado — para arquivamento. */
+    public function baixarXmlEvento(string $documentoId, string $eventoId): string
+    {
+        return $this->emissor->baixarXmlEvento($documentoId, $eventoId);
+    }
 }
