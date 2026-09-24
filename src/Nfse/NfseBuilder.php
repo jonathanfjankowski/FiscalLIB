@@ -172,8 +172,10 @@ final class NfseBuilder
             $erros['tributos'][] = 'Informe os tributos calculados (TaxEngine::calcularNfse).';
         }
 
-        // R-NFS006 — grupo IBSCBS obrigatório desde 01/08/2026.
-        $referencia = $this->dataCompetencia ?? gmdate('Y-m-d');
+        // R-NFS006 — grupo IBSCBS obrigatório desde 01/08/2026. Referência é a
+        // data local de Brasília: gmdate (UTC) viraria o dia às 21h de Brasília.
+        $referencia = $this->dataCompetencia
+            ?? (new \DateTimeImmutable('today', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d');
         if ($this->ibsCbs === null && strcmp($referencia, self::IBSCBS_OBRIGATORIO_DESDE) >= 0) {
             $erros['ibscbs'][] = 'Bloco IBSCBS obrigatório na DPS desde 01/08/2026 (R-NFS006).';
         }

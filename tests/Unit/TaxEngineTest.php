@@ -11,6 +11,7 @@ use FiscalLib\Common\Enums\Csosn;
 use FiscalLib\Common\Enums\ModoDeterminacaoBc;
 use FiscalLib\Common\Enums\OrigemMercadoria;
 use FiscalLib\Exceptions\MissingFieldException;
+use FiscalLib\Exceptions\TaxInconsistencyException;
 use FiscalLib\Exceptions\ValidationException;
 use FiscalLib\Tax\Contextos\IbsCbsEntrada;
 use FiscalLib\Tax\Contextos\IsEntrada;
@@ -291,5 +292,184 @@ final class TaxEngineTest extends TestCase
         );
 
         self::assertNull($r->valorIssqn);
+    }
+
+    // ------------------------------------------ validações de faixa (falha alta)
+
+    public function testAliquotaNegativaFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: -18)
+        );
+    }
+
+    public function testAliquotaAcimaDeCemFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 101)
+        );
+    }
+
+    public function testReducaoAcimaDeCemFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::ComReducaoDeBaseDeCalculo, aliquota: 18, reducaoBc: 150)
+        );
+    }
+
+    public function testDescontoMaiorQueBrutoFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto(1000, 2000)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
+        );
+    }
+
+    public function testQuantidadeNegativaFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            NfeTaxContext::make()->valores(-1, 100)->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
+        );
+    }
+
+    public function testMvaPodeExcederCem(): void
+    {
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaComCobrancaIcmsPorSt, aliquota: 18)
+                ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 150, aliquotaSt: 18)
+        );
+
+        // BC_ST = 1000 × 2,5 = 2500 (MVA acima de 100% existe na legislação do ST)
+        self::assertSame('2500.00', $r->icms->st->baseCalculoSt);
+    }
+
+    public function testDifalInternaMenorQueInterestadualFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 12)
+                ->difalInterestadual(12, 10)
+        );
+    }
+
+    public function testDifalComInternaIgualValorDestinoZero(): void
+    {
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 12)
+                ->difalInterestadual(12, 12)
+        );
+
+        self::assertSame('0.00', $r->icms->difal->valorIcmsDestino);
+    }
+
+    public function testDifalEmCsosn101Falha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, Csosn::TributadaComPermissaoDeCredito)
+                ->creditoSimples(2.5)
+                ->difalInterestadual(12, 18)
+        );
+    }
+
+    public function testCst10ComReducaoFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaComCobrancaIcmsPorSt, aliquota: 18, reducaoBc: 10)
+        );
+    }
+
+    public function testCreditoSimplesEmCstFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::Outros, aliquota: 18)->creditoSimples(2.5)
+        );
+    }
+
+    public function testCreditoSimplesEmCsosn102Falha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, Csosn::TributadaSemPermissaoDeCredito)->creditoSimples(2.5)
+        );
+    }
+
+    public function testCsosn101PercentualCreditoEcoadoEmQuatroCasas(): void
+    {
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, Csosn::TributadaComPermissaoDeCredito)
+                ->creditoSimples(2.5)
+        );
+
+        // Contrato: percentuais com 4 casas (antes ecoava '2.5' cru)
+        self::assertSame('2.5000', $r->icms->percentualCreditoSimples);
+        self::assertSame('25.00', $r->icms->valorCreditoSimples);
+    }
+
+    public function testCst51DiferimentoMenorQueUmVigesimo(): void
+    {
+        // pDif 0,004 (< 0,005): comparado em 2 casas parecia "sem diferimento"
+        // e enviava valor = vICMSOp integral. Em 4 casas, diferimento existe.
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::Diferimento, aliquota: 12)->diferimento(0.004)
+        );
+
+        self::assertNull($r->icms->valor);
+        self::assertSame('0.0040', $r->icms->percentualDiferimento);
+        self::assertSame('0.00', $r->icms->valorIcmsDiferido);
+    }
+
+    // ------------------------------------------------- validações NFS-e (domínios)
+
+    public function testNfseTributavelSemAliquotaFalha(): void
+    {
+        $this->expectException(MissingFieldException::class);
+        $this->engine->calcularNfse(NfseTaxContext::make()->servico(1000));
+    }
+
+    public function testNfseCstPisCofinsForaDoContratoFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfse(
+            NfseTaxContext::make()->servico(1000)->pisCofins('03', 0.65, 3.0) // 03 = monofásico por quantidade
+        );
+    }
+
+    public function testNfseTributacaoIssqnForaDoDominioFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfse(
+            NfseTaxContext::make()->servico(1000)->iss(5.0, tributacao: 9)
+        );
+    }
+
+    public function testNfseRetencaoIssqnForaDoDominioFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfse(
+            NfseTaxContext::make()->servico(1000)->iss(5.0, tributacao: 1, retencao: 7)
+        );
+    }
+
+    public function testNfseDescontoMaiorQueServicoFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfse(NfseTaxContext::make()->servico(1000, 2000));
+    }
+
+    public function testNfseAliquotasFederaisEcoadasEmQuatroCasas(): void
+    {
+        $r = $this->engine->calcularNfse(
+            NfseTaxContext::make()->servico(1000)->iss(5.0)->pisCofins('01', 0.65, 3)
+        );
+
+        self::assertSame('0.6500', $r->aliquotaPis);
+        self::assertSame('3.0000', $r->aliquotaCofins);
     }
 }

@@ -7,30 +7,30 @@ namespace FiscalLib\Common;
 /**
  * Aritmética decimal exata sobre strings com bcmath.
  * Nenhum cálculo fiscal passa por float.
+ *
+ * Invariante V004: toda operação devolve o valor com arredondamento bancário
+ * (half-to-even) no número de casas pedido — o bcmath sozinho trunca, então os
+ * resultados são calculados com dígitos de guarda e arredondados uma única vez.
  */
 final class Matematica
 {
+    private const GUARDA = 6;
+
     /** Normaliza qualquer entrada numérica para string decimal. */
     public static function normalizar(string|int|float $valor): string
     {
-        if (is_string($valor)) {
-            $limpo = str_replace([' ', ','], ['', '.'], trim($valor));
-            if ($limpo === '' || !is_numeric($limpo)) {
-                throw new \InvalidArgumentException("Valor numérico inválido: '{$valor}'");
-            }
-
-            return $limpo;
+        if (!is_string($valor)) {
+            $valor = (string) $valor;
         }
 
-        if (is_float($valor) && floor($valor) !== $valor) {
-            // Floats só entram com precisão trivial (ex.: 100.0). Usar strings
-            // para valores com centavos significativos.
-            if (abs($valor) > PHP_FLOAT_MAX / 1000) {
-                throw new \InvalidArgumentException('Valor float fora de faixa segura.');
-            }
+        $limpo = str_replace([' ', ','], ['', '.'], trim($valor));
+        // Notação científica ('1e3'), '.5' e '+5' passam em is_numeric, mas o
+        // bcmath rejeita: o domínio da lib é decimal puro, opcionalmente negativo.
+        if (!preg_match('/^-?\d+(\.\d+)?$/', $limpo)) {
+            throw new \InvalidArgumentException("Valor numérico inválido: '{$valor}'");
         }
 
-        return (string) $valor;
+        return $limpo;
     }
 
     public static function escalar(string|int|float $valor, int $casas = 2): string
@@ -40,17 +40,17 @@ final class Matematica
 
     public static function somar(string|int|float $a, string|int|float $b, int $casas = 2): string
     {
-        return bcadd(self::normalizar($a), self::normalizar($b), $casas);
+        return self::arredondado(bcadd(self::normalizar($a), self::normalizar($b), $casas + self::GUARDA), $casas);
     }
 
     public static function subtrair(string|int|float $a, string|int|float $b, int $casas = 2): string
     {
-        return bcsub(self::normalizar($a), self::normalizar($b), $casas);
+        return self::arredondado(bcsub(self::normalizar($a), self::normalizar($b), $casas + self::GUARDA), $casas);
     }
 
     public static function multiplicar(string|int|float $a, string|int|float $b, int $casas = 2): string
     {
-        return bcmul(self::normalizar($a), self::normalizar($b), $casas);
+        return self::arredondado(bcmul(self::normalizar($a), self::normalizar($b), $casas + self::GUARDA), $casas);
     }
 
     public static function dividir(string|int|float $a, string|int|float $b, int $casas = 2): string
@@ -60,13 +60,15 @@ final class Matematica
             throw new \InvalidArgumentException('Divisão por zero.');
         }
 
-        return bcdiv(self::normalizar($a), $divisor, $casas);
+        return self::arredondado(bcdiv(self::normalizar($a), $divisor, $casas + self::GUARDA), $casas);
     }
 
-    /** Percentual: valor × alíquota / 100 */
+    /** Percentual: valor × alíquota / 100, com um único arredondamento bancário final. */
     public static function percentualDe(string|int|float $valor, string|int|float $aliquota, int $casas = 2): string
     {
-        return self::dividir(self::multiplicar($valor, $aliquota, 6), '100', $casas);
+        $produto = bcmul(self::normalizar($valor), self::normalizar($aliquota), 12);
+
+        return self::arredondado(bcdiv($produto, '100', 12), $casas);
     }
 
     public static function comparar(string|int|float $a, string|int|float $b, int $casas = 2): int
@@ -90,5 +92,10 @@ final class Matematica
     public static function zero(): string
     {
         return '0.00';
+    }
+
+    private static function arredondado(string $valor, int $casas): string
+    {
+        return ArredondadorBancario::arredondar($valor, $casas);
     }
 }

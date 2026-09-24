@@ -158,6 +158,7 @@ final class MapeadorDocumentoTest extends TestCase
                     ->servico(1000)
                     ->iss(5, tributacao: 1, retencao: 2)
                     ->pisCofins('01', 0.65, 3.0)
+                    ->totalTributos('21.00', '18.00', '5.00')
             ))
             ->ibsCbs(new IbsCbsDps('000001', '101', '000001'))
             ->build();
@@ -195,6 +196,11 @@ final class MapeadorDocumentoTest extends TestCase
                     'valorPis' => 6.5,
                     'aliquotaCofins' => 3,
                     'valorCofins' => 30,
+                ],
+                'totalTributos' => [
+                    'federal' => 21,
+                    'estadual' => 18,
+                    'municipal' => 5,
                 ],
             ],
             'dataCompetencia' => '2026-09-05',

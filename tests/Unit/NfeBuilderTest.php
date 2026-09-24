@@ -143,6 +143,7 @@ final class NfeBuilderTest extends TestCase
         $doc = NfeBuilder::nfe()
             ->serie(1)
             ->naturezaOperacao('Venda')
+            ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
             ->addItem($this->item(tributos: $tributos))
             ->frete(20)
             ->descontoTotal(0) // presente → ativa fórmula v2
@@ -205,5 +206,83 @@ final class NfeBuilderTest extends TestCase
         $this->expectException(ValidationException::class);
         \FiscalLib\Nfce\NfceBuilder::nfce()
             ->consumidorFinal(IndicadorConsumidorFinal::Nao);
+    }
+
+    // ------------------------------------------------- regras R0xx (auditoria 0.2.1)
+
+    private function documentoBase(): NfeBuilder
+    {
+        return NfeBuilder::nfe()
+            ->serie(1)
+            ->naturezaOperacao('Venda')
+            ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'));
+    }
+
+    public function testNfeSemDestinatarioFalha(): void
+    {
+        try {
+            NfeBuilder::nfe()
+                ->serie(1)
+                ->naturezaOperacao('Venda')
+                ->addItem($this->item())
+                ->build();
+            self::fail('NF-e 55 sem destinatário deveria falhar.');
+        } catch (ValidationException $e) {
+            self::assertArrayHasKey('destinatario', $e->erros());
+        }
+    }
+
+    public function testDescricaoAcimaDe120CaracteresFalha(): void
+    {
+        $item = new ItemFiscal('SKU1', str_repeat('x', 121), '1.0000', '100.00', '100.00');
+
+        try {
+            $this->documentoBase()->addItem($item)->build();
+            self::fail('xProd acima de 120 caracteres deveria falhar (R015).');
+        } catch (ValidationException $e) {
+            self::assertArrayHasKey('itens[0].descricao', $e->erros());
+        }
+    }
+
+    public function testNcmComFormatoInvalidoFalha(): void
+    {
+        $item = new ItemFiscal('SKU1', 'Produto', '1.0000', '100.00', '100.00', ncm: '1234');
+
+        try {
+            $this->documentoBase()->addItem($item)->build();
+            self::fail('NCM sem 8 dígitos deveria falhar.');
+        } catch (ValidationException $e) {
+            self::assertArrayHasKey('itens[0].ncm', $e->erros());
+        }
+    }
+
+    public function testQuantidadeZeroFalha(): void
+    {
+        $item = new ItemFiscal('SKU1', 'Produto', '0.0000', '100.00', '0.00');
+
+        try {
+            $this->documentoBase()->addItem($item)->build();
+            self::fail('Quantidade zero deveria falhar.');
+        } catch (ValidationException $e) {
+            self::assertArrayHasKey('itens[0].quantidade', $e->erros());
+        }
+    }
+
+    public function testNfceSerieReservadaContingenciaFalha(): void
+    {
+        $this->expectException(ValidationException::class);
+        \FiscalLib\Nfce\NfceBuilder::nfce()
+            ->serie(900)
+            ->naturezaOperacao('Venda balcão')
+            ->addItem($this->item())
+            ->pagamento(FormaPagamento::Dinheiro, 100)
+            ->build();
+    }
+
+    public function testNfeSerieZeroEValida(): void
+    {
+        $doc = $this->documentoBase()->serie(0)->addItem($this->item())->build();
+
+        self::assertSame(0, $doc->serie);
     }
 }

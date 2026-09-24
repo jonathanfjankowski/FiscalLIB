@@ -8,6 +8,7 @@ use FiscalLib\Common\Enums\StatusDocumento;
 use FiscalLib\Documento\AceiteEmissao;
 use FiscalLib\Documento\ResultadoEmissao;
 use FiscalLib\Documento\ResultadoEvento;
+use FiscalLib\Exceptions\SerializationException;
 
 /**
  * JSON da FiscalAPI → modelos de resultado da lib.
@@ -20,7 +21,7 @@ final class MapeadorResultado
         $status = (string) ($dados['status'] ?? '');
 
         return new ResultadoEmissao(
-            documentoId: (string) ($dados['id'] ?? ''),
+            documentoId: self::idObrigatorio($dados),
             status: $status,
             statusDocumento: StatusDocumento::deTextoOuDesconhecido($status),
             tipo: isset($dados['tipo']) ? (string) $dados['tipo'] : null,
@@ -47,7 +48,7 @@ final class MapeadorResultado
         }
 
         return new AceiteEmissao(
-            documentoId: (string) ($dados['id'] ?? ''),
+            documentoId: self::idObrigatorio($dados),
             status: (string) ($dados['status'] ?? ''),
             ambiente: isset($dados['ambiente']) ? (string) $dados['ambiente'] : null,
             criadoEm: isset($dados['criadoEm']) ? (string) $dados['criadoEm'] : null,
@@ -59,8 +60,13 @@ final class MapeadorResultado
     /** @param array<string,mixed> $dados */
     public function paraResultadoEvento(array $dados, ?string $documentoId = null): ResultadoEvento
     {
+        $eventoId = (string) ($dados['eventoId'] ?? '');
+        if (trim($eventoId) === '') {
+            throw new SerializationException('Resposta de evento da API sem eventoId.');
+        }
+
         return new ResultadoEvento(
-            eventoId: (string) ($dados['eventoId'] ?? ''),
+            eventoId: $eventoId,
             tipo: (string) ($dados['tipo'] ?? ''),
             status: (string) ($dados['status'] ?? ''),
             documentoId: isset($dados['documentoId']) ? (string) $dados['documentoId'] : $documentoId,
@@ -69,5 +75,16 @@ final class MapeadorResultado
             xml: isset($dados['xml']) ? (string) $dados['xml'] : (isset($dados['xmlEvento']) ? (string) $dados['xmlEvento'] : null),
             raw: $dados,
         );
+    }
+
+    /** Resposta sem id viraria id vazio persistido pelo ERP e consulta/cancelamento quebrando depois. */
+    private static function idObrigatorio(array $dados): string
+    {
+        $id = (string) ($dados['id'] ?? '');
+        if (trim($id) === '') {
+            throw new SerializationException('Resposta da API sem id do documento.');
+        }
+
+        return $id;
     }
 }

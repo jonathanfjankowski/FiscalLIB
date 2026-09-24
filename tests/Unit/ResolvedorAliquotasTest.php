@@ -190,9 +190,10 @@ final class ResolvedorAliquotasTest extends TestCase
     {
         $aliquotas = $this->resolver->aliquotasIbsCbs(2026);
 
+        // IBS 0,1% integral na UF — 0,05/0,05 = rejeição 1026 na SEFAZ
         self::assertSame('0.90', $aliquotas->aliquotaCbs);
-        self::assertSame('0.05', $aliquotas->aliquotaIbsEstadual);
-        self::assertSame('0.05', $aliquotas->aliquotaIbsMunicipal);
+        self::assertSame('0.10', $aliquotas->aliquotaIbsEstadual);
+        self::assertSame('0.00', $aliquotas->aliquotaIbsMunicipal);
     }
 
     public function testAnoSemLeiDefinidaFalha(): void

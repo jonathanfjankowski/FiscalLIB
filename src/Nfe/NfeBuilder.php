@@ -223,20 +223,52 @@ class NfeBuilder
     {
         $erros = [];
 
-        if ($this->serie < 1 || $this->serie > 999) {
-            $erros['serie'][] = 'Série deve estar entre 1 e 999.';
+        if ($this->serie < 0 || $this->serie > 999) {
+            $erros['serie'][] = 'Série deve estar entre 0 e 999.';
         }
         if ($this->naturezaOperacao === null || trim($this->naturezaOperacao) === '') {
             $erros['naturezaOperacao'][] = 'Natureza da operação é obrigatória.';
+        } elseif (mb_strlen($this->naturezaOperacao) > 60) {
+            $erros['naturezaOperacao'][] = 'Natureza da operação deve ter no máximo 60 caracteres (natOp).';
         }
         if ($this->itens === []) {
             $erros['itens'][] = 'A nota deve ter ao menos um item.';
+        }
+        if ($this->modeloDocumento() === ModeloDocumento::Nfe && $this->destinatario === null) {
+            $erros['destinatario'][] = 'NF-e (modelo 55) exige destinatário identificado.';
+        }
+        if ($this->informacoesComplementares !== null && mb_strlen($this->informacoesComplementares) > 5000) {
+            $erros['informacoesComplementares'][] = 'Informações complementares devem ter no máximo 5000 caracteres (infCpl).';
         }
 
         foreach ($this->itens as $i => $item) {
             $esperado = Matematica::multiplicar($item->quantidade, $item->valorUnitario, 2);
             if (! Matematica::igual($esperado, $item->valorTotal)) {
                 $erros["itens[{$i}].valorTotal"][] = "Quantidade × valorUnitario ({$esperado}) difere do valorTotal ({$item->valorTotal}).";
+            }
+            if (bccomp($item->quantidade, '0', 4) <= 0) {
+                $erros["itens[{$i}].quantidade"][] = 'Quantidade deve ser maior que zero.';
+            }
+            if (bccomp($item->valorUnitario, '0', 10) <= 0) {
+                $erros["itens[{$i}].valorUnitario"][] = 'Valor unitário deve ser maior que zero.';
+            }
+            if (mb_strlen($item->codigo) > 60) {
+                $erros["itens[{$i}].codigo"][] = 'Código do produto deve ter no máximo 60 caracteres (cProd).';
+            }
+            if (mb_strlen($item->descricao) > 120) {
+                $erros["itens[{$i}].descricao"][] = 'Descrição do produto deve ter no máximo 120 caracteres (R015 — xProd).';
+            }
+            if ($item->ncm !== null && preg_match('/^\d{8}$/', $item->ncm) !== 1) {
+                $erros["itens[{$i}].ncm"][] = 'NCM deve ter exatamente 8 dígitos numéricos.';
+            }
+            if ($item->cest !== null && preg_match('/^\d{7}$/', $item->cest) !== 1) {
+                $erros["itens[{$i}].cest"][] = 'CEST deve ter exatamente 7 dígitos numéricos.';
+            }
+            if ($item->gtin !== null && preg_match('/^(SEM GTIN|\d{8}|\d{12}|\d{13}|\d{14})$/', $item->gtin) !== 1) {
+                $erros["itens[{$i}].gtin"][] = 'GTIN deve ter 8, 12, 13 ou 14 dígitos numéricos (ou "SEM GTIN").';
+            }
+            if ($item->unidade !== null && mb_strlen($item->unidade) > 6) {
+                $erros["itens[{$i}].unidade"][] = 'Unidade comercial deve ter no máximo 6 caracteres (uCom).';
             }
 
             // R001/R002 — coerência CFOP × tipo de operação.

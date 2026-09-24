@@ -49,11 +49,14 @@ final class GestaoFiscalApi
             ['name' => 'senha', 'contents' => $senha],
         ]);
 
+        // Idempotency-Key no upload: o retry de 429/5xx reenvia o PFX+senha —
+        // sem a chave, um 503 intermitente duplicaria o certificado no tenant.
         $requisicao = $this->fabrica
             ->createRequest('POST', $this->config->baseUrl . '/v1/certificados')
             ->withBody($multipart)
             ->withHeader('Content-Type', 'multipart/form-data; boundary=' . $multipart->getBoundary())
-            ->withHeader('Accept', 'application/json');
+            ->withHeader('Accept', 'application/json')
+            ->withHeader('Idempotency-Key', EmissorFiscalApi::novaIdempotencyKey());
 
         return $this->decodificar($this->http->enviarAutenticado($requisicao));
     }

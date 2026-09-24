@@ -7,6 +7,7 @@ namespace FiscalLib\Adapters\FiscalApi;
 use FiscalLib\Documento\ItemFiscal;
 use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\NfseDocumento;
+use FiscalLib\Exceptions\ValidationException;
 use FiscalLib\Tax\Resultados\NfeTaxResultado;
 
 /**
@@ -22,6 +23,15 @@ final class MapeadorDocumento
 
     public function paraEmissaoRequest(NfeDocumento $documento): array
     {
+        // A API não transmite infCpl na NF-e: melhor falhar aqui do que o ERP
+        // acreditar que o texto chegou à nota (perda silenciosa).
+        if ($documento->informacoesComplementares !== null) {
+            throw ValidationException::erro(
+                'informacoesComplementares',
+                'A FiscalAPI não transmite informacoesComplementares na NF-e — remova o campo ou use um emissor que o suporte.'
+            );
+        }
+
         $itens = [];
         foreach ($documento->itens as $item) {
             $itens[] = $this->paraItem($item);
@@ -274,11 +284,16 @@ final class MapeadorDocumento
         }
 
         if ($t->totalTributosFederal !== null || $t->totalTributosEstadual !== null || $t->totalTributosMunicipal !== null) {
-            $valores['totalTributos'] = self::numerificar([
-                'federal' => $t->totalTributosFederal,
-                'estadual' => $t->totalTributosEstadual,
-                'municipal' => $t->totalTributosMunicipal,
-            ]);
+            // Chaves aninhadas ('federal'...) não casam com PREFIXOS_NUMERICOS:
+            // converte explicitamente, ou decimais saem como string no JSON.
+            $valores['totalTributos'] = array_map(
+                self::num(...),
+                array_filter([
+                    'federal' => $t->totalTributosFederal,
+                    'estadual' => $t->totalTributosEstadual,
+                    'municipal' => $t->totalTributosMunicipal,
+                ], static fn (?string $valor): bool => $valor !== null),
+            );
         }
 
         return $valores;

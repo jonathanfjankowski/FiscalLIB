@@ -6,8 +6,10 @@ namespace FiscalLib\Tests\Port;
 
 use FiscalLib\Common\Enums\Ambiente;
 use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\Contracts\OpcoesEmissao;
+use FiscalLib\Documento\Destinatario;
 use FiscalLib\Documento\ItemFiscal;
 use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\ResultadoEmissao;
@@ -30,6 +32,7 @@ final class FiscalLibFluxoTest extends TestCase
             ->ambiente(Ambiente::Homologacao)
             ->serie(1)
             ->naturezaOperacao('Venda de mercadoria')
+            ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
             ->addItem(new ItemFiscal('SKU1', 'Produto', '1.0000', '100.00', '100.00'))
             ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
@@ -133,6 +136,14 @@ final class FiscalLibFluxoTest extends TestCase
         });
 
         $this->expectException(ApiIndisponivelException::class);
+        $aguardador->aguardar('doc-1');
+    }
+
+    public function testAguardadorRejeitaIntervalosVazios(): void
+    {
+        $aguardador = new AguardadorTerminal(new EmissorFake(), [], 60);
+
+        $this->expectException(\InvalidArgumentException::class);
         $aguardador->aguardar('doc-1');
     }
 }

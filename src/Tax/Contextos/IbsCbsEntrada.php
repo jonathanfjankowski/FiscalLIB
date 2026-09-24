@@ -6,7 +6,8 @@ namespace FiscalLib\Tax\Contextos;
 
 /**
  * Entrada do bloco IBS/CBS (LC 214/2025). As alíquotas são do ERP;
- * os valores são calculados pelo TaxEngine ("por fora" — somam no total).
+ * os valores são calculados pelo TaxEngine. IBS/CBS são "por fora" —
+ * NÃO compõem o valorNota (ver docs/fiscal-rules.md).
  */
 final class IbsCbsEntrada
 {

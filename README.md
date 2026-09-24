@@ -21,6 +21,10 @@ ERP ──► TaxEngine (cálculo puro) ──► Builders (regras) ──► Do
 
 ## Instalação
 
+> **Atenção**: o pacote ainda não está publicado no Packagist. Instale via
+> path/VCS repository apontando para este repositório — ver
+> `docs/integracao-erp-laravel.md` §1.2/§1.3.
+
 ```bash
 composer require jonathanfjankowski/fiscal-lib
 ```
@@ -146,7 +150,7 @@ Registre `FiscalLib\Laravel\FiscalLibServiceProvider` e use `app('fiscal-lib')`.
 
 ```bash
 composer install
-composer test   # PHPUnit (84 testes)
+composer test   # PHPUnit (suíte rápida: Unit + Contract + Port)
 composer stan   # PHPStan nível 5
 ```
 
