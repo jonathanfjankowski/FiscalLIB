@@ -109,7 +109,7 @@ final class MapeadorDocumento
                 'codigoTributarioNacional' => $documento->servico->codigoTributarioNacional,
                 'descricaoServico' => $documento->servico->descricaoServico,
             ],
-            'valores' => $this->paraValoresNfse($t),
+            'valores' => $this->paraValoresNfse($documento),
         ];
 
         if ($documento->dataCompetencia !== null) {
@@ -250,8 +250,9 @@ final class MapeadorDocumento
         return $tomador;
     }
 
-    private function paraValoresNfse(\FiscalLib\Tax\Resultados\NfseTaxResultado $t): array
+    private function paraValoresNfse(NfseDocumento $documento): array
     {
+        $t = $documento->tributos;
         $valores = [
             'valorServicos' => self::num($t->valorServicos),
             'tributacaoIssqn' => $t->tributacaoIssqn,
@@ -294,6 +295,10 @@ final class MapeadorDocumento
                     'municipal' => $t->totalTributosMunicipal,
                 ], static fn (?string $valor): bool => $valor !== null),
             );
+        }
+
+        if ($documento->codigoPaisResultado !== null) {
+            $valores['codigoPaisResultado'] = $documento->codigoPaisResultado;
         }
 
         return $valores;

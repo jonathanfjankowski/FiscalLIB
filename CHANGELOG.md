@@ -59,7 +59,25 @@ quando a rejeição técnica é ativada.
   silêncio); NFS-e valida domínios (tributacaoIssqn 1–4, retencaoIssqn 1–3,
   tipoRetencaoPisCofins 1–3, cstPisCofins na tabela do contrato) e exige
   alíquota ISS em operação tributável.
+- **Cronograma IBS/CBS em `build()` de NF-e/NFC-e** (docs/fiscal-rules.md
+  §Cronograma, spec §17): item com ICMS sem grupo IBS/CBS falha a partir de
+  03/08/2026 (regime normal — CST) e 04/01/2027 (Simples Nacional — CSOSN),
+  na data local de Brasília; regime identificado pelo código do item.
+- **R-NFS014 (exportação de serviços)**: `NfseBuilder::codigoPaisResultado()`
+  (cPaisResult, ISO 3166-1 numérico, 3 dígitos) — obrigatório com
+  `tributacaoIssqn = 3`, que passa a exigir alíquota ISS nula/zero; campo
+  `codigoPaisResultado` serializado em `valores`. **Espelhado na FiscalAPI**
+  (`NfseValoresDto.CodigoPaisResultado` + validação no `ValidadorNfseDps` +
+  mapeamento DPS).
+- **Validações de evento na PORTA** (`ServicoEventos`): justificativa/
+  correção 15–1000 caracteres e faixa de inutilização coerente valem para
+  QUALQUER `EmissorInterface` (antes só no adaptador FiscalAPI).
 - `MatematicaTest` — a classe de aritmética não tinha teste algum.
+- `GestaoFiscalApiTest` — contrato HTTP dos endpoints de gestão (certificados,
+  api-keys, perfil/webhooks, notas recebidas/manifestação), antes sem teste.
+- Testes da integração Laravel (`tests/Laravel/`, suíte nova) — provider,
+  singleton e alias; pulam sem illuminate instalado.
+- Testes de porta para `substituir()` de NFS-e e para as validações de evento.
 - Adaptador rejeita explicitamente `informacoesComplementares` na NF-e (a API
   não transmite infCpl — antes o texto era descartado em silêncio).
 

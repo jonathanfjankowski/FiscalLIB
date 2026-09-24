@@ -39,7 +39,7 @@
         "sort-packages": true
     },
     "scripts": {
-        "test": "phpunit --testsuite Unit,Contract,Port",
+        "test": "phpunit --testsuite Unit,Contract,Port,Laravel",
         "test:integration": "phpunit --testsuite Integration",
         "stan": "phpstan analyse --memory-limit=1G"
     },

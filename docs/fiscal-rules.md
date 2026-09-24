@@ -153,9 +153,12 @@ IBS/CBS e IS **não** entram no total (são conferidos à parte pela API).
 
 ## Cronograma verificado em `build()`
 
-| Data | Regra |
-|------|-------|
-| 01/08/2026 | IBSCBS obrigatório na DPS (R-NFS006) |
-| 03/08/2026 | IBS/CBS obrigatório NF-e/NFC-e Regime Normal |
-| 04/01/2027 | IBS/CBS obrigatório Simples Nacional |
-| Jul/2026 | CNPJ alfanumérico aceito (NT 009/2026 — `Cnpj` VO) |
+Verificado na data local de Brasília; o regime do item é identificado pelo
+código do ICMS (CST = regime normal, CSOSN = Simples Nacional).
+
+| Data | Regra | Verificação |
+|------|-------|-------------|
+| 01/08/2026 | IBSCBS obrigatório na DPS (R-NFS006) | `NfseBuilder` |
+| 03/08/2026 | IBS/CBS obrigatório NF-e/NFC-e Regime Normal | `NfeBuilder`/`NfceBuilder` |
+| 04/01/2027 | IBS/CBS obrigatório Simples Nacional | `NfeBuilder`/`NfceBuilder` |
+| Jul/2026 | CNPJ alfanumérico aceito (NT 009/2026 — `Cnpj` VO) | — |

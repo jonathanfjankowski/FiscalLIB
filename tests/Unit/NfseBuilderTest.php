@@ -102,4 +102,74 @@ final class NfseBuilderTest extends TestCase
             ->ibsCbs($this->ibsCbs())
             ->build();
     }
+
+    // ------------------------------------------------------------ R-NFS014 (exportação)
+
+    private function tributosExportacao(): \FiscalLib\Tax\Resultados\NfseTaxResultado
+    {
+        return (new TaxEngine())->calcularNfse(
+            NfseTaxContext::make()->servico(1000)->iss(0, tributacao: 3, retencao: 1)
+        );
+    }
+
+    public function testExportacaoSemCodigoPaisResultadoFalha(): void
+    {
+        try {
+            NfseBuilder::make()
+                ->tomador($this->tomador())
+                ->servico(new ServicoFiscal('010701', 'Serviço de exportação', codigoNbs: '112011000'))
+                ->tributos($this->tributosExportacao())
+                ->ibsCbs($this->ibsCbs())
+                ->build();
+            self::fail('Exportação sem codigoPaisResultado deveria falhar (R-NFS014).');
+        } catch (ValidationException $e) {
+            self::assertArrayHasKey('valores.codigoPaisResultado', $e->erros());
+        }
+    }
+
+    public function testExportacaoComPaisEIssZeradoPassa(): void
+    {
+        $doc = NfseBuilder::make()
+            ->tomador($this->tomador())
+            ->servico(new ServicoFiscal('010701', 'Serviço de exportação', codigoNbs: '112011000'))
+            ->tributos($this->tributosExportacao())
+            ->ibsCbs($this->ibsCbs())
+            ->codigoPaisResultado('840')
+            ->build();
+
+        self::assertSame('840', $doc->codigoPaisResultado);
+        self::assertNull($doc->tributos->valorIssqn);
+    }
+
+    public function testExportacaoComAliquotaIssPositivaFalha(): void
+    {
+        $tributos = (new TaxEngine())->calcularNfse(
+            NfseTaxContext::make()->servico(1000)->iss(5, tributacao: 3, retencao: 1)
+        );
+
+        try {
+            NfseBuilder::make()
+                ->tomador($this->tomador())
+                ->servico(new ServicoFiscal('010701', 'Serviço de exportação', codigoNbs: '112011000'))
+                ->tributos($tributos)
+                ->ibsCbs($this->ibsCbs())
+                ->codigoPaisResultado('840')
+                ->build();
+            self::fail('Exportação com alíquota ISS positiva deveria falhar (R-NFS014).');
+        } catch (ValidationException $e) {
+            self::assertArrayHasKey('valores.aliquotaIssqn', $e->erros());
+        }
+    }
+
+    public function testCodigoPaisForaDaExportacaoFalha(): void
+    {
+        $this->expectException(ValidationException::class);
+        NfseBuilder::make()
+            ->tomador($this->tomador())
+            ->servico(new ServicoFiscal('010701', 'Serviço', codigoNbs: '112011000'))
+            ->tributos($this->tributos())
+            ->ibsCbs($this->ibsCbs())
+            ->codigoPaisResultado('840')
+            ->build();
+    }
 }

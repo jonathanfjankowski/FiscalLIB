@@ -71,8 +71,8 @@ expõe `->intermediador(IndicadorIntermediador $indicador, ?string $cnpj = null)
 
 NFS-e DPS: `ambiente`, `serie`, `tomador{...}`, `servico{codigoTributarioNacional,
 descricaoServico, codigoNbs}`, `valores{valorServicos, tributacaoIssqn, retencaoIssqn,
-aliquotaIssqn, tributacaoFederal{...}}`, `ibscbs{finalidade, codigoIndicadorOperacao,
-gibbsCbs{cst, cClassTrib}}`.
+aliquotaIssqn, codigoPaisResultado (R-NFS014 — exportação), tributacaoFederal{...}}`,
+`ibscbs{finalidade, codigoIndicadorOperacao, gibbsCbs{cst, cClassTrib}}`.
 
 Headers em todo POST: `Authorization: ApiKey <chave>` + `Idempotency-Key` (UUID v4
 gerado pela lib se o ERP não fornecer). Erros seguem RFC 7807 e viram exceções

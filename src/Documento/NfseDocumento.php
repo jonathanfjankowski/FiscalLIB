@@ -25,6 +25,7 @@ final class NfseDocumento
         public readonly ?int $codigoMunicipioEmissor = null,
         public readonly ?Emitente $prestador = null,
         public readonly ?string $informacoesComplementares = null,
+        public readonly ?string $codigoPaisResultado = null, // cPaisResult — R-NFS014 (exportação, ISO 3166-1 numérico)
     ) {
     }
 }

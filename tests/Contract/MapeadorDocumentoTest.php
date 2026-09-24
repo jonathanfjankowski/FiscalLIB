@@ -21,6 +21,7 @@ use FiscalLib\Nfe\NfeBuilder;
 use FiscalLib\Nfse\NfseBuilder;
 use FiscalLib\Tax\Contextos\NfseTaxContext;
 use FiscalLib\Tax\Resultados\ImpostoTrioResultado;
+use FiscalLib\Tax\Resultados\IbsCbsResultado;
 use FiscalLib\Tax\Resultados\IcmsResultado;
 use FiscalLib\Tax\Resultados\IcmsStResultado;
 use FiscalLib\Tax\Resultados\NfeTaxResultado;
@@ -52,6 +53,12 @@ final class MapeadorDocumentoTest extends TestCase
             ipi: new ImpostoTrioResultado(cst: '50', cEnq: '999', baseCalculo: '100.00', aliquota: '10.0000', valor: '10.00'),
             pis: new ImpostoTrioResultado(cst: '01', baseCalculo: '100.00', aliquota: '1.6500', valor: '1.65'),
             cofins: new ImpostoTrioResultado(cst: '01', baseCalculo: '100.00', aliquota: '7.6000', valor: '7.60'),
+            ibsCbs: new IbsCbsResultado(
+                cstIbsCbs: '000', cClassTrib: '000001', baseCalculo: '100.00',
+                aliquotaCbs: '0.9000', valorCbs: '0.90',
+                aliquotaIbsEstadual: '0.1000', valorIbsEstadual: '0.10',
+                aliquotaIbsMunicipal: '0.0000', valorIbsMunicipal: '0.00',
+            ),
         );
 
         $documento = NfeBuilder::nfe()
@@ -111,12 +118,25 @@ final class MapeadorDocumentoTest extends TestCase
                     'ipi' => ['cst' => '50', 'baseCalculo' => 100, 'aliquota' => 10, 'valor' => 10, 'cEnq' => '999'],
                     'pis' => ['cst' => '01', 'baseCalculo' => 100, 'aliquota' => 1.65, 'valor' => 1.65],
                     'cofins' => ['cst' => '01', 'baseCalculo' => 100, 'aliquota' => 7.6, 'valor' => 7.6],
+                    'ibsCbs' => [
+                        'cstIbsCbs' => '000',
+                        'cClassTrib' => '000001',
+                        'baseCalculo' => 100,
+                        'aliquotaCbs' => 0.9,
+                        'valorCbs' => 0.9,
+                        'aliquotaIbsEstadual' => 0.1,
+                        'valorIbsEstadual' => 0.1,
+                        'aliquotaIbsMunicipal' => 0,
+                        'valorIbsMunicipal' => 0,
+                    ],
                 ],
             ]],
             'totais' => [
                 'valorProdutos' => 100,
                 'valorNota' => 143.4, // 100 + frete 10 + ST 23.40 + IPI 10 (fórmula v2)
                 'valorFrete' => 10,
+                'valorIbs' => 0.1,    // conferência — IBS/CBS não compõem o valorNota
+                'valorCbs' => 0.9,
             ],
             'naturezaOperacao' => 'Venda de mercadoria',
             'finalidade' => 'normal',

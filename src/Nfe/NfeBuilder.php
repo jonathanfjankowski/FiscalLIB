@@ -38,6 +38,10 @@ use FiscalLib\Exceptions\ValidationException;
  */
 class NfeBuilder
 {
+    /** Cronograma LC 214/2025 — IBS/CBS obrigatório (docs/fiscal-rules.md §Cronograma). */
+    public const IBSCBS_OBRIGATORIO_REGIME_NORMAL_DESDE = '2026-08-03';
+    public const IBSCBS_OBRIGATORIO_SIMPLES_DESDE = '2027-01-04';
+
     protected Ambiente $ambiente = Ambiente::Homologacao;
     protected int $serie = 1;
     protected ?string $naturezaOperacao = null;
@@ -287,6 +291,24 @@ class NfeBuilder
             $erros['nfesReferenciadas'][] = 'Devolução exige ao menos uma NF-e referenciada (v2 F4).';
         }
 
+        // Cronograma LC 214/2025: após a virada, item com ICMS sem grupo IBS/CBS
+        // é rejeição na SEFAZ — antecipa no builder. Regime pelo código: CSOSN =
+        // Simples Nacional (prazo 2027); CST = regime normal (prazo 08/2026).
+        $hoje = $this->hoje();
+        foreach ($this->itens as $i => $item) {
+            $icms = $item->tributos?->icms;
+            if ($icms === null || $item->tributos->ibsCbs !== null) {
+                continue;
+            }
+            $prazo = $icms->csosn !== null
+                ? self::IBSCBS_OBRIGATORIO_SIMPLES_DESDE
+                : self::IBSCBS_OBRIGATORIO_REGIME_NORMAL_DESDE;
+            if (strcmp($hoje, $prazo) >= 0) {
+                $erros["itens[{$i}].impostosV2.ibsCbs"][] =
+                    "Grupo IBS/CBS obrigatório desde {$prazo} (cronograma LC 214/2025).";
+            }
+        }
+
         foreach ($this->pagamentos as $p) {
             if (bccomp($p->valor, '0', 2) < 0) {
                 $erros['pagamento'][] = 'Valor de pagamento negativo.';
@@ -331,6 +353,12 @@ class NfeBuilder
     protected function modeloDocumento(): ModeloDocumento
     {
         return ModeloDocumento::Nfe;
+    }
+
+    /** Data local de Brasília (ponto de injeção para testes de cronograma). */
+    protected function hoje(): string
+    {
+        return (new \DateTimeImmutable('today', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d');
     }
 
     /** Ganchos de validação do NFC-e builder. */
