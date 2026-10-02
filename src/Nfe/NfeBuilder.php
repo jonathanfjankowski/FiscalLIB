@@ -23,6 +23,7 @@ use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\NfeReferenciada;
 use FiscalLib\Documento\Pagamento;
 use FiscalLib\Documento\TotaisDocumento;
+use FiscalLib\Documento\TransporteDocumento;
 use FiscalLib\Exceptions\MissingFieldException;
 use FiscalLib\Exceptions\TaxInconsistencyException;
 use FiscalLib\Exceptions\ValidationException;
@@ -68,6 +69,7 @@ class NfeBuilder
     protected ?string $outrasDespesas = null;
     protected ?string $valorDescontoDocumento = null;
     protected ?string $informacoesComplementares = null;
+    protected ?TransporteDocumento $transporte = null;
 
     public static function make(): static
     {
@@ -219,6 +221,14 @@ class NfeBuilder
         return $this;
     }
 
+    /** Grupo transp (v2 §7) — modalidade, transportadora e volumes. */
+    public function transporte(TransporteDocumento $transporte): static
+    {
+        $this->transporte = $transporte;
+
+        return $this;
+    }
+
     /**
      * @throws ValidationException
      * @throws TaxInconsistencyException
@@ -347,6 +357,7 @@ class NfeBuilder
             informacoesComplementares: $this->informacoesComplementares,
             indicadorIntermediador: $this->indicadorIntermediador,
             cnpjIntermediador: $this->cnpjIntermediador,
+            transporte: $this->transporte,
         );
     }
 

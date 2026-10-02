@@ -85,6 +85,95 @@ final class TaxEngineTest extends TestCase
         self::assertNull($r->icms->baseCalculo);
     }
 
+    public function testDesoneracaoCst40(): void
+    {
+        // vICMSDeson = base cheia × alíquota (não há vICMS destacado)
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::Isenta, aliquota: 18)->desoneracao('9')
+        );
+
+        self::assertSame('180.00', $r->icms->valorDesonerado);
+        self::assertSame('9', $r->icms->motivoDesoneracao);
+        self::assertNull($r->icms->valor);
+    }
+
+    public function testDesoneracaoCst20(): void
+    {
+        // vICMSDeson = base cheia × alíq − vICMS destacado (180 − 162)
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::ComReducaoDeBaseDeCalculo, aliquota: 18, reducaoBc: 10)->desoneracao('3')
+        );
+
+        self::assertSame('900.00', $r->icms->baseCalculo);
+        self::assertSame('162.00', $r->icms->valor);
+        self::assertSame('18.00', $r->icms->valorDesonerado);
+        self::assertSame('3', $r->icms->motivoDesoneracao);
+    }
+
+    public function testDesoneracaoCst70ComSt(): void
+    {
+        $r = $this->engine->calcularNfe(
+            $this->contexto()
+                ->icms(OrigemMercadoria::Nacional, CstIcms::ComReducaoDeBaseECobrancaPorSt, aliquota: 18, reducaoBc: 10)
+                ->st(ModoDeterminacaoBc::PrecoTabeladoMaximo, mva: 30, aliquotaSt: 18)
+                ->desoneracao('9')
+        );
+
+        self::assertSame('18.00', $r->icms->valorDesonerado);
+        // ST própria sobre a base reduzida: 900 × 1,3 (MVA) × 18% = 210,60
+        self::assertSame('210.60', $r->icms->st->valorSt);
+    }
+
+    public function testDesoneracaoSemAliquotaFalha(): void
+    {
+        $this->expectException(MissingFieldException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::Isenta)->desoneracao('9')
+        );
+    }
+
+    public function testDesoneracaoCstNaoAdmissivelFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)->desoneracao('9')
+        );
+    }
+
+    public function testDesoneracaoSimplesNacionalFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, Csosn::SemIncidencia)->desoneracao('9')
+        );
+    }
+
+    public function testMotivoDesoneracaoInvalidoFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::Isenta, aliquota: 18)->desoneracao('5')
+        );
+    }
+
+    public function testCBenefPropagado(): void
+    {
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)->cBenef('RBC1234567')
+        );
+
+        self::assertSame('RBC1234567', $r->icms->codigoBeneficioFiscal);
+        self::assertSame('RBC1234567', $r->paraArray()['icms']['codigoBeneficioFiscal']);
+    }
+
+    public function testCBenefMuitoLongoFalha(): void
+    {
+        $this->expectException(TaxInconsistencyException::class);
+        $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)->cBenef('RBC1234567890')
+        );
+    }
+
     public function testCst51DiferimentoOmiteValor(): void
     {
         $r = $this->engine->calcularNfe(

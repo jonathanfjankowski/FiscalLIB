@@ -17,6 +17,9 @@ use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\NfseDocumento;
 use FiscalLib\Documento\ServicoFiscal;
 use FiscalLib\Documento\Tomador;
+use FiscalLib\Documento\TransportadoraDocumento;
+use FiscalLib\Documento\TransporteDocumento;
+use FiscalLib\Documento\VolumeDocumento;
 use FiscalLib\Nfe\NfeBuilder;
 use FiscalLib\Nfse\NfseBuilder;
 use FiscalLib\Tax\Contextos\NfseTaxContext;
@@ -234,5 +237,87 @@ final class MapeadorDocumentoTest extends TestCase
         ];
 
         self::assertSame($esperado, $payload);
+    }
+
+    public function testTransporteEDesoneracaoNoJson(): void
+    {
+        $tributos = new NfeTaxResultado(
+            icms: new IcmsResultado(
+                origem: 0, cst: '40',
+                valorDesonerado: '18.00', motivoDesoneracao: '9',
+                codigoBeneficioFiscal: 'RBC1234567',
+            ),
+            ibsCbs: new IbsCbsResultado(
+                cstIbsCbs: '000', cClassTrib: '000001', baseCalculo: '100.00',
+                aliquotaCbs: '0.9000', valorCbs: '0.90',
+                aliquotaIbsEstadual: '0.1000', valorIbsEstadual: '0.10',
+                aliquotaIbsMunicipal: '0.0000', valorIbsMunicipal: '0.00',
+            ),
+        );
+
+        $documento = NfeBuilder::nfe()
+            ->ambiente(Ambiente::Homologacao)
+            ->serie(1)
+            ->naturezaOperacao('Venda com desoneração')
+            ->destinatario(new Destinatario(
+                Cnpj::criar('11444777000161'),
+                'Cliente Teste Ltda',
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP),
+            ))
+            ->addItem(new ItemFiscal(
+                codigo: 'SKU1',
+                descricao: 'Produto com ICMS desonerado',
+                quantidade: '1.0000',
+                valorUnitario: '100.00',
+                valorTotal: '100.00',
+                tributos: $tributos,
+                ncm: '12345678',
+                cfop: '5102',
+            ))
+            ->pagamento(FormaPagamento::Dinheiro, 82)
+            ->transporte(new TransporteDocumento(
+                modalidadeFrete: '0',
+                transportadora: new TransportadoraDocumento(
+                    cnpjCpf: '45997418000153', nome: 'Transportadora Teste', inscricaoEstadual: '12345678',
+                    logradouro: 'Rodovia BR-101, km 10', municipio: 'Curitiba', uf: 'PR',
+                ),
+                volumes: [
+                    new VolumeDocumento(
+                        quantidade: 2, especie: 'Caixa', marca: 'Okto', numeracao: '001-002',
+                        pesoLiquido: '10.50', pesoBruto: '11.00', lacres: ['LAC-1', 'LAC-2'],
+                    ),
+                ],
+            ))
+            ->build();
+
+        $payload = json_decode((string) json_encode($this->mapeador->paraEmissaoRequest($documento)), true);
+
+        self::assertSame([
+            'modalidadeFrete' => '0',
+            'transportadora' => [
+                'cnpjCpf' => '45997418000153',
+                'nome' => 'Transportadora Teste',
+                'inscricaoEstadual' => '12345678',
+                'enderecoLogradouro' => 'Rodovia BR-101, km 10',
+                'enderecoMunicipio' => 'Curitiba',
+                'enderecoUf' => 'PR',
+            ],
+            'volumes' => [[
+                'quantidade' => 2,
+                'especie' => 'Caixa',
+                'marca' => 'Okto',
+                'numeracao' => '001-002',
+                'pesoLiquido' => 10.5,
+                'pesoBruto' => 11,
+                'lacres' => [['numero' => 'LAC-1'], ['numero' => 'LAC-2']],
+            ]],
+        ], $payload['transporte']);
+
+        self::assertSame(18, $payload['itens'][0]['impostosV2']['icms']['valorDesonerado']);
+        self::assertSame('9', $payload['itens'][0]['impostosV2']['icms']['motivoDesoneracao']);
+        self::assertSame('RBC1234567', $payload['itens'][0]['impostosV2']['icms']['codigoBeneficioFiscal']);
+        // 100 bruto − 18 desonerado = 82 (desoneração ativa a fórmula v2)
+        self::assertSame(82, $payload['totais']['valorNota']);
+        self::assertSame(18, $payload['totais']['valorDesonerado']);
     }
 }

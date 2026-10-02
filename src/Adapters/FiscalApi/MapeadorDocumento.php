@@ -7,6 +7,7 @@ namespace FiscalLib\Adapters\FiscalApi;
 use FiscalLib\Documento\ItemFiscal;
 use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\NfseDocumento;
+use FiscalLib\Documento\TransporteDocumento;
 use FiscalLib\Exceptions\ValidationException;
 use FiscalLib\Tax\Resultados\NfeTaxResultado;
 
@@ -92,6 +93,10 @@ final class MapeadorDocumento
             if ($documento->cnpjIntermediador !== null) {
                 $request['cnpjIntermediador'] = $documento->cnpjIntermediador;
             }
+        }
+
+        if ($documento->transporte !== null) {
+            $request['transporte'] = $this->paraTransporte($documento->transporte);
         }
 
         return $request;
@@ -207,7 +212,7 @@ final class MapeadorDocumento
             'valorProdutos' => self::num($t->valorProdutos),
             'valorNota' => self::num($t->valorNota),
         ];
-        foreach (['valorDesconto', 'valorFrete', 'valorSeguro', 'outrasDespesas', 'valorIbs', 'valorCbs', 'valorIs'] as $campo) {
+        foreach (['valorDesconto', 'valorFrete', 'valorSeguro', 'outrasDespesas', 'valorDesonerado', 'valorIbs', 'valorCbs', 'valorIs'] as $campo) {
             $valor = $t->{$campo};
             if ($valor !== null) {
                 $totais[$campo] = self::num($valor);
@@ -215,6 +220,55 @@ final class MapeadorDocumento
         }
 
         return $totais;
+    }
+
+    /** Grupo transp (v2 §7) — mesmo shape do TransporteDto da FiscalAPI. */
+    private function paraTransporte(TransporteDocumento $transporte): array
+    {
+        $dados = ['modalidadeFrete' => $transporte->modalidadeFrete];
+
+        if ($transporte->transportadora !== null) {
+            $t = $transporte->transportadora;
+            $transportadora = array_filter([
+                'cnpjCpf' => $t->cnpjCpf,
+                'nome' => $t->nome,
+                'inscricaoEstadual' => $t->inscricaoEstadual,
+                'enderecoLogradouro' => $t->logradouro,
+                'enderecoMunicipio' => $t->municipio,
+                'enderecoUf' => $t->uf,
+            ], static fn ($v) => $v !== null && $v !== '');
+            if ($transportadora !== []) {
+                $dados['transportadora'] = $transportadora;
+            }
+        }
+
+        if ($transporte->volumes !== []) {
+            $volumes = [];
+            foreach ($transporte->volumes as $volume) {
+                $v = array_filter([
+                    'quantidade' => $volume->quantidade,
+                    'especie' => $volume->especie,
+                    'marca' => $volume->marca,
+                    'numeracao' => $volume->numeracao,
+                    'pesoLiquido' => $volume->pesoLiquido === null ? null : self::num($volume->pesoLiquido),
+                    'pesoBruto' => $volume->pesoBruto === null ? null : self::num($volume->pesoBruto),
+                ], static fn ($v) => $v !== null && $v !== '');
+                if ($volume->lacres !== []) {
+                    $v['lacres'] = array_map(
+                        static fn (string $numero): array => ['numero' => $numero],
+                        $volume->lacres,
+                    );
+                }
+                if ($v !== []) {
+                    $volumes[] = $v;
+                }
+            }
+            if ($volumes !== []) {
+                $dados['volumes'] = $volumes;
+            }
+        }
+
+        return $dados;
     }
 
     private function paraTomador(NfseDocumento $documento): array

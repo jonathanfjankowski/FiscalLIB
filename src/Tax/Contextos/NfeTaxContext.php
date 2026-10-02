@@ -59,6 +59,10 @@ final class NfeTaxContext
     // CST 51
     public ?string $percentualDiferimento = null;
 
+    // Desoneração (vICMSDeson/motDesICMS) e benefício fiscal (cBenefRBC)
+    public ?string $motivoDesoneracao = null;       // domínio do layout: 3, 9, 12
+    public ?string $codigoBeneficioFiscal = null;   // 1–10 posições
+
     // DIFAL
     public bool $difal = false;
     public ?int $aliquotaInterestadual = null;   // 4, 7 ou 12
@@ -176,6 +180,22 @@ final class NfeTaxContext
     public function diferimento(string|int|float $percentual): self
     {
         $this->percentualDiferimento = Matematica::normalizar($percentual);
+
+        return $this;
+    }
+
+    /** Motivo da desoneração do ICMS (vICMSDeson/motDesICMS) — CST 20/40/41/70/90. */
+    public function desoneracao(string $motivo): self
+    {
+        $this->motivoDesoneracao = $motivo;
+
+        return $this;
+    }
+
+    /** Código de benefício fiscal na UF (cBenefRBC) — vai no item, fora do grupo ICMS do XML. */
+    public function cBenef(string $codigo): self
+    {
+        $this->codigoBeneficioFiscal = $codigo;
 
         return $this;
     }
