@@ -20,6 +20,11 @@ enum FormaPagamento: string
     case ValeCombustivel = '13';
     case DuplicataMercantil = '14';
     case Boleto = '15';
+    case DepositoBancario = '16';
+    case PagamentoInstantaneoPix = '17';
+    case TransferenciaBancariaCarteiraDigital = '18';
+    case FidelidadeCashbackCreditoVirtual = '19';
+    case PagamentoPosterior = '21';
     case SemPagamento = '90';
     case Outros = '99';
 }
