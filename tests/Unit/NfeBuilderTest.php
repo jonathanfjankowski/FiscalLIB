@@ -320,6 +320,20 @@ final class NfeBuilderTest extends TestCase
         }
     }
 
+    public function testIbsCbsDispensavelPassaSemGrupoNaFaseOpcional(): void
+    {
+        // LC 214/2025: destaque opcional em 2026 — o emissor (ERP) decide a
+        // política; com a dispensa, item sem IBS/CBS NÃO falha no cronograma.
+        $semIbsCbs = new NfeTaxResultado(
+            icms: new IcmsResultado(origem: 0, cst: '00', modBc: '3', baseCalculo: '100.00', aliquota: '18.0000', valor: '18.00'),
+        );
+
+        $documento = $this->documentoBase()->ibsCbsDispensavel();
+        $documento->addItem($this->item(tributos: $semIbsCbs))->build();
+
+        self::assertTrue(true); // build sem exceção
+    }
+
     public function testItemRegimeNormalComIbsCbsPassa(): void
     {
         $doc = $this->documentoBase()

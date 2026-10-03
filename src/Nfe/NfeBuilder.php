@@ -39,9 +39,25 @@ use FiscalLib\Exceptions\ValidationException;
  */
 class NfeBuilder
 {
+    /** LC 214/2025: em fase de destaque opcional, o item pode sair sem IBS/CBS. */
+    public function ibsCbsDispensavel(bool $dispensavel = true): static
+    {
+        $this->ibsCbsDispensavel = $dispensavel;
+
+        return $this;
+    }
+
     /** Cronograma LC 214/2025 — IBS/CBS obrigatório (docs/fiscal-rules.md §Cronograma). */
     public const IBSCBS_OBRIGATORIO_REGIME_NORMAL_DESDE = '2026-08-03';
     public const IBSCBS_OBRIGATORIO_SIMPLES_DESDE = '2027-01-04';
+
+    /**
+     * Dispensa a exigência do cronograma IBS/CBS (destaque OPCIONAL em 2026,
+     * LC 214/2025 art. 22 §2): o ERP decide a política fiscal — quando o
+     * emissor opta por não destacar na fase opcional, o item pode sair sem
+     * o grupo. Default false: builder exige pelo cronograma (fiscal seguro).
+     */
+    protected bool $ibsCbsDispensavel = false;
 
     protected Ambiente $ambiente = Ambiente::Homologacao;
     protected int $serie = 1;
@@ -307,7 +323,7 @@ class NfeBuilder
         $hoje = $this->hoje();
         foreach ($this->itens as $i => $item) {
             $icms = $item->tributos?->icms;
-            if ($icms === null || $item->tributos->ibsCbs !== null) {
+            if ($this->ibsCbsDispensavel || $icms === null || $item->tributos->ibsCbs !== null) {
                 continue;
             }
             $prazo = $icms->csosn !== null
