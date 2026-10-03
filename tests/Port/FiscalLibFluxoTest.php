@@ -115,6 +115,20 @@ final class FiscalLibFluxoTest extends TestCase
         self::assertSame(['doc-1'], $fake->cancelamentos);
     }
 
+    public function testReenvioSubmeteMesmoDocumentoId(): void
+    {
+        $fake = new EmissorFake();
+        $lib = new FiscalLib($fake);
+
+        // Reenvio da "nota 22": MESMO id na API, documento corrigido no corpo.
+        $resultado = $lib->nfe()->reenviar('doc-22', $this->documento());
+
+        self::assertCount(1, $fake->reenvios);
+        self::assertSame('doc-22', $fake->reenvios[0]['documentoId']);
+        self::assertSame('doc-22', $resultado->documentoId);
+        self::assertSame('AUTORIZADA', $resultado->statusEnum()?->value);
+    }
+
     public function testGestaoIndisponivelParaEmissorGenerico(): void
     {
         $lib = new FiscalLib(new EmissorFake());
