@@ -26,11 +26,9 @@ final class MapeadorDocumento
     {
         // A API não transmite infCpl na NF-e: melhor falhar aqui do que o ERP
         // acreditar que o texto chegou à nota (perda silenciosa).
+        // infCpl — a FiscalAPI transmite (v2 §8)
         if ($documento->informacoesComplementares !== null) {
-            throw ValidationException::erro(
-                'informacoesComplementares',
-                'A FiscalAPI não transmite informacoesComplementares na NF-e — remova o campo ou use um emissor que o suporte.'
-            );
+            $request['informacoesComplementares'] = $documento->informacoesComplementares;
         }
 
         $itens = [];
