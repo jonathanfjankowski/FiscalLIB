@@ -6,7 +6,8 @@ namespace FiscalLib\Tax\Resultados;
 
 /**
  * Grupo IBS/CBS (impostosV2.ibsCbs) — LC 214/2025 / NT 2025.x.
- * IBS "por fora": soma no total da nota conforme o contrato v2.
+ * IBS/CBS são "por fora": NÃO compõem o valorNota (ver docs/fiscal-rules.md);
+ * os valores aqui servem de conferência e vão no payload da DPS.
  */
 final class IbsCbsResultado
 {

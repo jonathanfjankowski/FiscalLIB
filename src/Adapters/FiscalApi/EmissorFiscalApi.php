@@ -68,6 +68,22 @@ final class EmissorFiscalApi implements EmissorInterface
         return $this->mapeadorResultado->paraAceiteEmissao($resposta);
     }
 
+    public function reenviar(string $documentoId, NfeDocumento|NfseDocumento $documento): AceiteEmissao
+    {
+        if (! $documento instanceof NfeDocumento) {
+            throw ValidationException::erro('documento', 'Reenvio disponível apenas para NF-e/NFC-e.');
+        }
+
+        // O reenvio usa o MESMO documento da API — o caminho leva o id;
+        // o corpo é o contrato completo corrigido (mesma montagem da emissão).
+        $caminhoReenvio = '/v1/documentos-fiscais/' . $this->idSeguro($documentoId) . '/reenviar';
+        $corpo = $this->mapeadorDocumento->paraEmissaoRequest($documento);
+
+        $resposta = $this->http->postSemIdempotencia($caminhoReenvio, $corpo);
+
+        return $this->mapeadorResultado->paraAceiteEmissao($resposta);
+    }
+
     public function consultar(string $documentoId): ResultadoEmissao
     {
         $resposta = $this->http->get("/v1/documentos-fiscais/{$this->idSeguro($documentoId)}");

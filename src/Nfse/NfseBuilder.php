@@ -33,6 +33,7 @@ final class NfseBuilder
     private ?IbsCbsDps $ibsCbs = null;
     private ?Emitente $prestador = null;
     private ?string $informacoesComplementares = null;
+    private ?string $codigoPaisResultado = null;
 
     /** Obrigatório a partir de 01/08/2026 (NT 003-009) — R-NFS006. */
     public const IBSCBS_OBRIGATORIO_DESDE = '2026-08-01';
@@ -120,6 +121,14 @@ final class NfseBuilder
         return $this;
     }
 
+    /** cPaisResult — país do resultado da prestação (ISO 3166-1 numérico, 3 dígitos). R-NFS014. */
+    public function codigoPaisResultado(string $codigo): self
+    {
+        $this->codigoPaisResultado = $codigo;
+
+        return $this;
+    }
+
     public function build(): NfseDocumento
     {
         $erros = [];
@@ -172,8 +181,10 @@ final class NfseBuilder
             $erros['tributos'][] = 'Informe os tributos calculados (TaxEngine::calcularNfse).';
         }
 
-        // R-NFS006 — grupo IBSCBS obrigatório desde 01/08/2026.
-        $referencia = $this->dataCompetencia ?? gmdate('Y-m-d');
+        // R-NFS006 — grupo IBSCBS obrigatório desde 01/08/2026. Referência é a
+        // data local de Brasília: gmdate (UTC) viraria o dia às 21h de Brasília.
+        $referencia = $this->dataCompetencia
+            ?? (new \DateTimeImmutable('today', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d');
         if ($this->ibsCbs === null && strcmp($referencia, self::IBSCBS_OBRIGATORIO_DESDE) >= 0) {
             $erros['ibscbs'][] = 'Bloco IBSCBS obrigatório na DPS desde 01/08/2026 (R-NFS006).';
         }
@@ -190,6 +201,24 @@ final class NfseBuilder
             }
             if ($this->ibsCbs->tipoOperacaoGov !== null && $this->ibsCbs->tipoEnteGovernamental === null) {
                 $erros['ibscbs.tipoEnteGovernamental'][] = 'tpOper informado exige tpEnteGov (1 União, 2 Estado, 3 DF, 4 Município).';
+            }
+        }
+
+        // R-NFS014 — exportação de serviços: resultado da prestação no exterior
+        // (cPaisResult, ISO 3166-1 numérico) e ISS não devido.
+        if ($this->tributos !== null && $this->tributos->tributacaoIssqn === 3) {
+            if ($this->codigoPaisResultado === null || preg_match('/^\d{3}$/', $this->codigoPaisResultado) !== 1) {
+                $erros['valores.codigoPaisResultado'][] =
+                    'Exportação (tributacaoIssqn = 3) exige codigoPaisResultado com 3 dígitos (ISO 3166-1 numérico — ex.: 840 = EUA).';
+            }
+            if ($this->tributos->aliquotaIssqn !== null && bccomp($this->tributos->aliquotaIssqn, '0', 4) !== 0) {
+                $erros['valores.aliquotaIssqn'][] =
+                    'Exportação (tributacaoIssqn = 3) não é tributável pelo ISS — aliquotaIssqn deve ser nula ou zero.';
+            }
+        } else {
+            if ($this->tributos !== null && $this->codigoPaisResultado !== null) {
+                $erros['valores.codigoPaisResultado'][] =
+                    'codigoPaisResultado só se aplica a exportação (tributacaoIssqn = 3).';
             }
         }
 
@@ -211,6 +240,7 @@ final class NfseBuilder
             codigoMunicipioEmissor: $this->codigoMunicipioEmissor,
             prestador: $this->prestador,
             informacoesComplementares: $this->informacoesComplementares,
+            codigoPaisResultado: $this->codigoPaisResultado,
         );
     }
 }

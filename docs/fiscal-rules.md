@@ -18,7 +18,8 @@ baseComReducao  = basePropria × (1 − percentualReducaoBc / 100)     (CST 20/5
 | 00 | trio próprio (base, alíq, valor) + FCP | redução não admitida (use 20) |
 | 10 | trio + **ST própria** | `BC_ST = base × (1+MVA) × (1−redBCST)`; `vICMSST = BC_ST × alíqST` (fórmula direta — sem subtrair ICMS próprio, como valida a API) |
 | 20 | trio sobre base reduzida | `percentualReducaoBc` obrigatório |
-| 40/41/50 | sem valores próprios | isenta/NT/suspensão |
+| 40/41 | sem valores próprios | isenta/NT |
+| 50 | **fora do contrato** | suspensão — a case não existe em `CstIcms`; use 90 (Outros) se precisar informar o contexto |
 | 51 | diferimento | `vICMSOp = base × alíq`; `vICMSDif = vICMSOp × pDif`; **`valor` só é enviado quando pDif = 0** (o validador da API exige valor = base×alíq) |
 | 60 | ST **retida** | campos `st.baseCalculoStRetido/aliquotaStRetida/valorStRetido` (vBCSTRet/pST/vICMSSTRet); `valorStRetido` calculado se omitido |
 | 70 | redução + ST própria | ST parte da **base reduzida** |
@@ -74,7 +75,7 @@ recebendo as alíquotas explícitas no contexto — a aritmética desta página 
 | Interestadual | orig ∈ {1,2,3,6,7,8} → 4%; origem sul/sudeste → 12% (destino s/s) ou 7% (demais); origem demais → 12% | Res. Senado 22/1989 e 13/2012 |
 | Interna geral | 27 UFs, regra geral do estado, **sem FCP** (`aliquotaInternaGeral`) | legislações estaduais (doc §2) |
 | FCP/FECP | 14 UFs com adicional; demais `null` (`aliquotaFcp`) | doc §4 (EC 132/2023, teto 2%) |
-| IBS/CBS | só 2026 fase-teste: CBS 0,9 · IBS UF 0,05 · IBS Mun 0,05; outro ano → `ValidationException` | LC 214/2025 art. 348 |
+| IBS/CBS | só 2026 fase-teste: CBS 0,9 · IBS UF 0,10 · IBS Mun 0,00 (0,1% integral na UF — divisão 0,05/0,05 = rejeição 1026); outro ano → `ValidationException` | LC 214/2025 art. 348 |
 
 Overrides (`comAliquotaInterna`/`comFcp`) são imutáveis e vencem a tabela — a
 interna geral **não serve** para produtos com alíquota diferenciada (bebidas,
@@ -152,9 +153,12 @@ IBS/CBS e IS **não** entram no total (são conferidos à parte pela API).
 
 ## Cronograma verificado em `build()`
 
-| Data | Regra |
-|------|-------|
-| 01/08/2026 | IBSCBS obrigatório na DPS (R-NFS006) |
-| 03/08/2026 | IBS/CBS obrigatório NF-e/NFC-e Regime Normal |
-| 04/01/2027 | IBS/CBS obrigatório Simples Nacional |
-| Jul/2026 | CNPJ alfanumérico aceito (NT 009/2026 — `Cnpj` VO) |
+Verificado na data local de Brasília; o regime do item é identificado pelo
+código do ICMS (CST = regime normal, CSOSN = Simples Nacional).
+
+| Data | Regra | Verificação |
+|------|-------|-------------|
+| 01/08/2026 | IBSCBS obrigatório na DPS (R-NFS006) | `NfseBuilder` |
+| 03/08/2026 | IBS/CBS obrigatório NF-e/NFC-e Regime Normal | `NfeBuilder`/`NfceBuilder` |
+| 04/01/2027 | IBS/CBS obrigatório Simples Nacional | `NfeBuilder`/`NfceBuilder` |
+| Jul/2026 | CNPJ alfanumérico aceito (NT 009/2026 — `Cnpj` VO) | — |

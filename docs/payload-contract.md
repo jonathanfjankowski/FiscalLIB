@@ -65,14 +65,14 @@ no mapeador (`gtin: "SEM GTIN"`, `unidade: "UN"`). Exemplo (CST 10 + ST + IPI):
 ```
 
 NF-e via marketplace/intermediador (NT 2020.006 — `indIntermed`, só mod 55): o builder
-expõe `->intermediador(int $indicador, ?string $cnpj = null)` (0 = sem intermediador —
-default da API; 1 = site/plataforma de terceiros, exige CNPJ) e o payload ganha
+expõe `->intermediador(IndicadorIntermediador $indicador, ?string $cnpj = null)`
+(`SemIntermediador` = default da API; `PlataformaTerceiros` exige CNPJ) e o payload ganha
 `"indicadorIntermediador": 1, "cnpjIntermediador": "..."` → grupo `infIntermed`.
 
 NFS-e DPS: `ambiente`, `serie`, `tomador{...}`, `servico{codigoTributarioNacional,
 descricaoServico, codigoNbs}`, `valores{valorServicos, tributacaoIssqn, retencaoIssqn,
-aliquotaIssqn, tributacaoFederal{...}}`, `ibscbs{finalidade, codigoIndicadorOperacao,
-gibbsCbs{cst, cClassTrib}}`.
+aliquotaIssqn, codigoPaisResultado (R-NFS014 — exportação), tributacaoFederal{...}}`,
+`ibscbs{finalidade, codigoIndicadorOperacao, gibbsCbs{cst, cClassTrib}}`.
 
 Headers em todo POST: `Authorization: ApiKey <chave>` + `Idempotency-Key` (UUID v4
 gerado pela lib se o ERP não fornecer). Erros seguem RFC 7807 e viram exceções
@@ -115,8 +115,8 @@ Diretrizes para implementar:
    de forma uniforme entre emissores.
 
 O adaptador `Adapters\FiscalApi\EmissorFiscalApi` (≈200 linhas) é a referência
-de implementação. Os testes em `tests/Port/EmissorFakeTest` mostram o núcleo
-funcionando contra um emissor sem qualquer HTTP.
+de implementação. Os testes em `tests/Port/FiscalLibFluxoTest` (com o
+`EmissorFake`) mostram o núcleo funcionando contra um emissor sem qualquer HTTP.
 
 ## 4. O que o núcleo NÃO faz
 

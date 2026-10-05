@@ -47,6 +47,9 @@ final class AguardadorTerminal
     public function aguardar(string $documentoId): ResultadoEmissao
     {
         $intervalos = $this->intervalos ?? FiscalConfig::INTERVALOS_POLLING_PADRAO;
+        if ($intervalos === []) {
+            throw new \InvalidArgumentException('intervalosPolling não pode ser vazio (FiscalConfig).');
+        }
         $timeout = $this->timeoutTotalSegundos ?? FiscalConfig::TIMEOUT_TOTAL_POLLING_PADRAO;
 
         $inicio = microtime(true);

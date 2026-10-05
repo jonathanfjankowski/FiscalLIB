@@ -25,7 +25,7 @@ final class FiscalConfig
         public readonly int $tentativasRede = 3,          // 429/5xx/timeout com a MESMA idempotency key
         public readonly array $intervalosPolling = self::INTERVALOS_POLLING_PADRAO,
         public readonly int $timeoutTotalPollingSegundos = self::TIMEOUT_TOTAL_POLLING_PADRAO,
-        public readonly string $versaoLib = '0.1.0',
+        public readonly string $versaoLib = '0.2.1',
     ) {
     }
 

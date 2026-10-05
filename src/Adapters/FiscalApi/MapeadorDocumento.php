@@ -7,6 +7,8 @@ namespace FiscalLib\Adapters\FiscalApi;
 use FiscalLib\Documento\ItemFiscal;
 use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\NfseDocumento;
+use FiscalLib\Documento\TransporteDocumento;
+use FiscalLib\Exceptions\ValidationException;
 use FiscalLib\Tax\Resultados\NfeTaxResultado;
 
 /**
@@ -22,6 +24,13 @@ final class MapeadorDocumento
 
     public function paraEmissaoRequest(NfeDocumento $documento): array
     {
+        // A API não transmite infCpl na NF-e: melhor falhar aqui do que o ERP
+        // acreditar que o texto chegou à nota (perda silenciosa).
+        // infCpl — a FiscalAPI transmite (v2 §8)
+        if ($documento->informacoesComplementares !== null) {
+            $request['informacoesComplementares'] = $documento->informacoesComplementares;
+        }
+
         $itens = [];
         foreach ($documento->itens as $item) {
             $itens[] = $this->paraItem($item);
@@ -84,6 +93,10 @@ final class MapeadorDocumento
             }
         }
 
+        if ($documento->transporte !== null) {
+            $request['transporte'] = $this->paraTransporte($documento->transporte);
+        }
+
         return $request;
     }
 
@@ -99,7 +112,7 @@ final class MapeadorDocumento
                 'codigoTributarioNacional' => $documento->servico->codigoTributarioNacional,
                 'descricaoServico' => $documento->servico->descricaoServico,
             ],
-            'valores' => $this->paraValoresNfse($t),
+            'valores' => $this->paraValoresNfse($documento),
         ];
 
         if ($documento->dataCompetencia !== null) {
@@ -197,7 +210,7 @@ final class MapeadorDocumento
             'valorProdutos' => self::num($t->valorProdutos),
             'valorNota' => self::num($t->valorNota),
         ];
-        foreach (['valorDesconto', 'valorFrete', 'valorSeguro', 'outrasDespesas', 'valorIbs', 'valorCbs', 'valorIs'] as $campo) {
+        foreach (['valorDesconto', 'valorFrete', 'valorSeguro', 'outrasDespesas', 'valorDesonerado', 'valorIbs', 'valorCbs', 'valorIs'] as $campo) {
             $valor = $t->{$campo};
             if ($valor !== null) {
                 $totais[$campo] = self::num($valor);
@@ -205,6 +218,55 @@ final class MapeadorDocumento
         }
 
         return $totais;
+    }
+
+    /** Grupo transp (v2 §7) — mesmo shape do TransporteDto da FiscalAPI. */
+    private function paraTransporte(TransporteDocumento $transporte): array
+    {
+        $dados = ['modalidadeFrete' => $transporte->modalidadeFrete];
+
+        if ($transporte->transportadora !== null) {
+            $t = $transporte->transportadora;
+            $transportadora = array_filter([
+                'cnpjCpf' => $t->cnpjCpf,
+                'nome' => $t->nome,
+                'inscricaoEstadual' => $t->inscricaoEstadual,
+                'enderecoLogradouro' => $t->logradouro,
+                'enderecoMunicipio' => $t->municipio,
+                'enderecoUf' => $t->uf,
+            ], static fn ($v) => $v !== null && $v !== '');
+            if ($transportadora !== []) {
+                $dados['transportadora'] = $transportadora;
+            }
+        }
+
+        if ($transporte->volumes !== []) {
+            $volumes = [];
+            foreach ($transporte->volumes as $volume) {
+                $v = array_filter([
+                    'quantidade' => $volume->quantidade,
+                    'especie' => $volume->especie,
+                    'marca' => $volume->marca,
+                    'numeracao' => $volume->numeracao,
+                    'pesoLiquido' => $volume->pesoLiquido === null ? null : self::num($volume->pesoLiquido),
+                    'pesoBruto' => $volume->pesoBruto === null ? null : self::num($volume->pesoBruto),
+                ], static fn ($v) => $v !== null && $v !== '');
+                if ($volume->lacres !== []) {
+                    $v['lacres'] = array_map(
+                        static fn (string $numero): array => ['numero' => $numero],
+                        $volume->lacres,
+                    );
+                }
+                if ($v !== []) {
+                    $volumes[] = $v;
+                }
+            }
+            if ($volumes !== []) {
+                $dados['volumes'] = $volumes;
+            }
+        }
+
+        return $dados;
     }
 
     private function paraTomador(NfseDocumento $documento): array
@@ -240,8 +302,9 @@ final class MapeadorDocumento
         return $tomador;
     }
 
-    private function paraValoresNfse(\FiscalLib\Tax\Resultados\NfseTaxResultado $t): array
+    private function paraValoresNfse(NfseDocumento $documento): array
     {
+        $t = $documento->tributos;
         $valores = [
             'valorServicos' => self::num($t->valorServicos),
             'tributacaoIssqn' => $t->tributacaoIssqn,
@@ -274,11 +337,20 @@ final class MapeadorDocumento
         }
 
         if ($t->totalTributosFederal !== null || $t->totalTributosEstadual !== null || $t->totalTributosMunicipal !== null) {
-            $valores['totalTributos'] = self::numerificar([
-                'federal' => $t->totalTributosFederal,
-                'estadual' => $t->totalTributosEstadual,
-                'municipal' => $t->totalTributosMunicipal,
-            ]);
+            // Chaves aninhadas ('federal'...) não casam com PREFIXOS_NUMERICOS:
+            // converte explicitamente, ou decimais saem como string no JSON.
+            $valores['totalTributos'] = array_map(
+                self::num(...),
+                array_filter([
+                    'federal' => $t->totalTributosFederal,
+                    'estadual' => $t->totalTributosEstadual,
+                    'municipal' => $t->totalTributosMunicipal,
+                ], static fn (?string $valor): bool => $valor !== null),
+            );
+        }
+
+        if ($documento->codigoPaisResultado !== null) {
+            $valores['codigoPaisResultado'] = $documento->codigoPaisResultado;
         }
 
         return $valores;

@@ -382,8 +382,8 @@ Limpeza, conservação, dedetização, asseio, jardinagem, vigilância, seguran�
 ```
 Para NF-e/NFC-e:
   pAliqCBS = 0.9     [fase de teste]
-  pAliqIBSUF  = 0.05 [fase de teste]
-  pAliqIBSMun = 0.05 [fase de teste]
+  pAliqIBSUF  = 0.10 [fase de teste — divisão 0,05/0,05 rejeitada pela SEFAZ (cStat 1026)]
+  pAliqIBSMun = 0.00 [fase de teste]
   vCBS = BC × 0.9 / 100   [informativo]
   vIBS = BC × 0.1 / 100   [informativo]
 
@@ -449,7 +449,8 @@ ANTES de montar o `NfeTaxContext`:
   pronto para `NfeTaxContext::difalInterestadual()` — §2/§3/§4
 - `aliquotaInternaGeral(UF)` — regra geral do estado, **sem FCP** — §2
 - `aliquotaFcp(UF)` — adicional FCP/FECP por UF (null = sem) — §4
-- `aliquotasIbsCbs(2026)` — fase-teste LC 214/2025 (CBS 0,9 · IBS 0,05 + 0,05) — §11
+- `aliquotasIbsCbs(2026)` — fase-teste LC 214/2025 (CBS 0,9 · IBS UF 0,10 + Mun 0,00,
+  divisão corrigida após rejeição SEFAZ cStat 1026) — §11
 
 **Overrides imutáveis** (`comAliquotaInterna`/`comFcp`) deixam o ERP vencer a
 tabela por produto. A interna geral é a regra do estado — produtos com alíquota

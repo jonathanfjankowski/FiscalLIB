@@ -10,9 +10,9 @@ use FiscalLib\Common\Matematica;
  * Totais do documento — fórmula determinística do contrato (v2 §5.2):
  *
  *   Ativa a fórmula v2 quando qualquer campo novo está presente
- *   (desconto, frete, seguro, outras despesas ou IPI em item):
+ *   (desconto, frete, seguro, outras despesas, IPI em item ou desoneração):
  *     valorNota = Σ brutos − descontos + frete + seguro + outras
- *                 + ST + FCP-ST + IPI
+ *                 + ST + FCP-ST + IPI − ICMS desonerado
  *
  *   Caso contrário (regra antiga): valorNota = Σ brutos.
  *
@@ -27,6 +27,7 @@ final class TotaisDocumento
         public readonly ?string $valorFrete = null,
         public readonly ?string $valorSeguro = null,
         public readonly ?string $outrasDespesas = null,
+        public readonly ?string $valorDesonerado = null, // Σ vICMSDeson (subtrai do total)
         public readonly ?string $valorIbs = null,   // conferência (não compõe o total)
         public readonly ?string $valorCbs = null,
         public readonly ?string $valorIs = null,
@@ -50,6 +51,7 @@ final class TotaisDocumento
         $st = '0.00';
         $fcpSt = '0.00';
         $ipi = '0.00';
+        $desonerado = '0.00';
         $ibs = '0.00';
         $cbs = '0.00';
         $is = '0.00';
@@ -72,6 +74,10 @@ final class TotaisDocumento
                 $formulaV2 = true;
                 $ipi = Matematica::somar($ipi, $t->totalIpi());
             }
+            if (bccomp($t->totalDesonerado(), '0', 2) !== 0) {
+                $formulaV2 = true;
+                $desonerado = Matematica::somar($desonerado, $t->totalDesonerado());
+            }
             if ($t->ibsCbs !== null) {
                 $ibs = Matematica::somar($ibs, $t->ibsCbs->totalIbs());
                 $cbs = Matematica::somar($cbs, $t->ibsCbs->valorCbs ?? '0.00');
@@ -91,6 +97,7 @@ final class TotaisDocumento
             $total = Matematica::somar($total, $st);
             $total = Matematica::somar($total, $fcpSt);
             $total = Matematica::somar($total, $ipi);
+            $total = Matematica::subtrair($total, $desonerado);
         } else {
             $total = $brutos;
         }
@@ -102,6 +109,7 @@ final class TotaisDocumento
             valorFrete: $valorFrete,
             valorSeguro: $valorSeguro,
             outrasDespesas: $outrasDespesas,
+            valorDesonerado: bccomp($desonerado, '0', 2) === 0 ? null : $desonerado,
             valorIbs: bccomp($ibs, '0', 2) === 0 ? null : $ibs,
             valorCbs: bccomp($cbs, '0', 2) === 0 ? null : $cbs,
             valorIs: bccomp($is, '0', 2) === 0 ? null : $is,

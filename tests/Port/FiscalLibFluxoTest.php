@@ -6,16 +6,25 @@ namespace FiscalLib\Tests\Port;
 
 use FiscalLib\Common\Enums\Ambiente;
 use FiscalLib\Common\Enums\FormaPagamento;
+use FiscalLib\Common\Enums\ModeloDocumento;
+use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Config\FiscalConfig;
 use FiscalLib\Contracts\OpcoesEmissao;
+use FiscalLib\Documento\AceiteEmissao;
+use FiscalLib\Documento\Destinatario;
+use FiscalLib\Documento\InutilizacaoPedido;
 use FiscalLib\Documento\ItemFiscal;
 use FiscalLib\Documento\NfeDocumento;
+use FiscalLib\Documento\NfseDocumento;
 use FiscalLib\Documento\ResultadoEmissao;
 use FiscalLib\Exceptions\ApiIndisponivelException;
 use FiscalLib\Exceptions\RejeicaoSefazException;
+use FiscalLib\Exceptions\ValidationException;
 use FiscalLib\FiscalLib;
 use FiscalLib\Nfe\NfeBuilder;
 use FiscalLib\Servicos\AguardadorTerminal;
+use FiscalLib\Tax\Contextos\NfseTaxContext;
+use FiscalLib\Tax\TaxEngine;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -30,6 +39,7 @@ final class FiscalLibFluxoTest extends TestCase
             ->ambiente(Ambiente::Homologacao)
             ->serie(1)
             ->naturezaOperacao('Venda de mercadoria')
+            ->destinatario(new Destinatario(Cnpj::criar('11444777000161'), 'Cliente Teste Ltda'))
             ->addItem(new ItemFiscal('SKU1', 'Produto', '1.0000', '100.00', '100.00'))
             ->pagamento(FormaPagamento::Dinheiro, 100)
             ->build();
@@ -105,6 +115,20 @@ final class FiscalLibFluxoTest extends TestCase
         self::assertSame(['doc-1'], $fake->cancelamentos);
     }
 
+    public function testReenvioSubmeteMesmoDocumentoId(): void
+    {
+        $fake = new EmissorFake();
+        $lib = new FiscalLib($fake);
+
+        // Reenvio da "nota 22": MESMO id na API, documento corrigido no corpo.
+        $resultado = $lib->nfe()->reenviar('doc-22', $this->documento());
+
+        self::assertCount(1, $fake->reenvios);
+        self::assertSame('doc-22', $fake->reenvios[0]['documentoId']);
+        self::assertSame('doc-22', $resultado->documentoId);
+        self::assertSame('AUTORIZADA', $resultado->statusEnum()?->value);
+    }
+
     public function testGestaoIndisponivelParaEmissorGenerico(): void
     {
         $lib = new FiscalLib(new EmissorFake());
@@ -134,5 +158,83 @@ final class FiscalLibFluxoTest extends TestCase
 
         $this->expectException(ApiIndisponivelException::class);
         $aguardador->aguardar('doc-1');
+    }
+
+    public function testAguardadorRejeitaIntervalosVazios(): void
+    {
+        $aguardador = new AguardadorTerminal(new EmissorFake(), [], 60);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $aguardador->aguardar('doc-1');
+    }
+
+    // ------------------------------------- validações de evento na PORTA (qualquer emissor)
+
+    public function testCancelamentoComJustificativaCurtaNaoAtingeEmissor(): void
+    {
+        $fake = new EmissorFake();
+        $lib = new FiscalLib($fake);
+
+        try {
+            $lib->eventos()->cancelar('doc-1', 'curto');
+            self::fail('Justificativa menor que 15 caracteres deveria falhar na porta.');
+        } catch (ValidationException $e) {
+            self::assertSame([], $fake->cancelamentos, 'emissor não deve ser acionado com entrada inválida');
+        }
+    }
+
+    public function testInutilizacaoComFaixaInvertidaFalhaNaPorta(): void
+    {
+        $lib = new FiscalLib(new EmissorFake());
+
+        $this->expectException(ValidationException::class);
+        $lib->eventos()->inutilizar(new InutilizacaoPedido(
+            Ambiente::Homologacao,
+            ModeloDocumento::Nfe,
+            1,
+            100,
+            50,
+            'Inutilização de numeração não utilizada no período.',
+        ));
+    }
+
+    // ------------------------------------------------------- substituição de NFS-e
+
+    public function testSubstituirNfsePassaPelaPorta(): void
+    {
+        $capturas = [];
+        $fake = new class extends EmissorFake {
+            /** @var list<array{string, int, ?string}> */
+            public array $substituicoes = [];
+
+            public function substituir(string $documentoId, NfseDocumento $substituta, int $cMotivo, ?string $xMotivo = null, ?OpcoesEmissao $opcoes = null): AceiteEmissao
+            {
+                $this->substituicoes[] = [$documentoId, $cMotivo, $xMotivo];
+
+                return new AceiteEmissao('doc-sub-1', 'PENDENTE');
+            }
+        };
+        $lib = new FiscalLib($fake);
+
+        $aceite = $lib->nfse()->substituir('doc-1', $this->nfseSubstituta(), 1, 'Erro nos valores da prestação');
+
+        self::assertSame('doc-sub-1', $aceite->documentoId);
+        self::assertSame(['doc-1', 1, 'Erro nos valores da prestação'], $fake->substituicoes[0]);
+    }
+
+    private function nfseSubstituta(): NfseDocumento
+    {
+        return new NfseDocumento(
+            ambiente: Ambiente::Homologacao,
+            serie: 1,
+            tomador: new \FiscalLib\Documento\Tomador(
+                Cnpj::criar('11444777000161'),
+                'Cliente Serviço Ltda',
+            ),
+            servico: new \FiscalLib\Documento\ServicoFiscal('010701', 'Desenvolvimento de software'),
+            tributos: (new TaxEngine())->calcularNfse(
+                NfseTaxContext::make()->servico(1000)->iss(5)
+            ),
+        );
     }
 }

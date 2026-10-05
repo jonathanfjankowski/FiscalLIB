@@ -33,7 +33,7 @@ Em um projeto Laravel `illuminate/support` já está instalado — não é preci
 
 ### 1.2 Instalação via repositório local (path repository)
 
-O pacote está em `C:\Projetos\Pessoal\FiscalLIB` (git, tag `v0.1.0`). No `composer.json`
+O pacote está em `C:\Projetos\Pessoal\FiscalLIB` (git, tag `v0.2.0`). No `composer.json`
 do ERP, adicione o repositório e exija o pacote:
 
 ```json
@@ -55,7 +55,7 @@ composer update jonathanfjankowski/fiscal-lib
 ```
 
 Com `type: "path"` o Composer resolve a versão a partir do git do repositório
-(atualmente `0.1.0`, tag `v0.1.0`) e faz symlink — alterações na lib aparecem
+(atualmente `0.2.x`, tag `v0.2.0`) e faz symlink — alterações na lib aparecem
 imediatamente no ERP (útil durante a integração).
 
 ### 1.3 Instalação via VCS git (equipe/CI)
@@ -67,11 +67,11 @@ Se a lib estiver hospedada num servidor git acessível (GitHub, GitLab, Bitbucke
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://seu-servidor-git/usuario/fiscal-lib.git"
+            "url": "https://github.com/jonathanfjankowski/FiscalLIB.git"
         }
     ],
     "require": {
-        "jonathanfjankowski/fiscal-lib": "^0.1.0"
+        "jonathanfjankowski/fiscal-lib": "^0.2.0"
     }
 }
 ```
@@ -85,8 +85,9 @@ composer require jonathanfjankowski/fiscal-lib
 ```
 
 > Limitação conhecida: no momento o pacote **não** está publicado no Packagist;
-> use path ou VCS (seções 1.2/1.3). Não existe também um servidor git remoto
-> configurado no repositório local — publique-o antes de usar a opção 1.3.
+> use path ou VCS (seções 1.2/1.3). O repositório tem remote no GitHub
+> (`https://github.com/jonathanfjankowski/FiscalLIB`) — garanta que as tags
+> estejam publicadas lá (`git push --tags`) antes de usar a opção 1.3.
 
 ---
 
@@ -220,7 +221,7 @@ public function __construct(
     public readonly int $tentativasRede = 3,          // 429/5xx/timeout com a MESMA idempotency key
     public readonly array $intervalosPolling = self::INTERVALOS_POLLING_PADRAO,  // [2, 5, 10, 20, 30, 60]
     public readonly int $timeoutTotalPollingSegundos = self::TIMEOUT_TOTAL_POLLING_PADRAO, // 300
-    public readonly string $versaoLib = '0.1.0',      // vai no User-Agent
+    public readonly string $versaoLib = '0.2.1',      // vai no User-Agent
 );
 
 // FiscalLib
@@ -513,7 +514,7 @@ $resolvedor->aliquotaInternaGeral(UF::SP); // '18.00'
 $resolvedor->aliquotaFcp(UF::RJ);          // '2.00'
 
 // IBS/CBS de referência (só 2026 — fase-teste; outros anos: forneça via ERP)
-$resolvedor->aliquotasIbsCbs(2026); // CBS 0.90 | IBS UF 0.05 | IBS Mun 0.05
+$resolvedor->aliquotasIbsCbs(2026); // CBS 0.90 | IBS UF 0.10 | IBS Mun 0.00
 ```
 
 **Overrides** (imutáveis — devolvem nova instância e vencem a tabela): a tabela
@@ -554,7 +555,7 @@ public function consumidorFinal(IndicadorConsumidorFinal $consumidorFinal): stat
 public function emitente(Emitente $emitente): static;
 public function destinatario(Destinatario $destinatario): static;
 public function addItem(ItemFiscal $item): static;
-public function pagamento(FormaPagamento|string $forma, string|int|float $valor): static;
+public function pagamento(FormaPagamento $forma, string|int|float $valor): static;
 public function nfeReferenciada(string $chaveAcesso): static;                  // valida 44 posições + DV módulo 11
 public function frete(string|int|float $valor): static;
 public function seguro(string|int|float $valor): static;

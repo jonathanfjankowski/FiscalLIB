@@ -23,6 +23,7 @@ use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\NfeReferenciada;
 use FiscalLib\Documento\Pagamento;
 use FiscalLib\Documento\TotaisDocumento;
+use FiscalLib\Documento\TransporteDocumento;
 use FiscalLib\Exceptions\MissingFieldException;
 use FiscalLib\Exceptions\TaxInconsistencyException;
 use FiscalLib\Exceptions\ValidationException;
@@ -38,6 +39,26 @@ use FiscalLib\Exceptions\ValidationException;
  */
 class NfeBuilder
 {
+    /** LC 214/2025: em fase de destaque opcional, o item pode sair sem IBS/CBS. */
+    public function ibsCbsDispensavel(bool $dispensavel = true): static
+    {
+        $this->ibsCbsDispensavel = $dispensavel;
+
+        return $this;
+    }
+
+    /** Cronograma LC 214/2025 — IBS/CBS obrigatório (docs/fiscal-rules.md §Cronograma). */
+    public const IBSCBS_OBRIGATORIO_REGIME_NORMAL_DESDE = '2026-08-03';
+    public const IBSCBS_OBRIGATORIO_SIMPLES_DESDE = '2027-01-04';
+
+    /**
+     * Dispensa a exigência do cronograma IBS/CBS (destaque OPCIONAL em 2026,
+     * LC 214/2025 art. 22 §2): o ERP decide a política fiscal — quando o
+     * emissor opta por não destacar na fase opcional, o item pode sair sem
+     * o grupo. Default false: builder exige pelo cronograma (fiscal seguro).
+     */
+    protected bool $ibsCbsDispensavel = false;
+
     protected Ambiente $ambiente = Ambiente::Homologacao;
     protected int $serie = 1;
     protected ?string $naturezaOperacao = null;
@@ -64,6 +85,7 @@ class NfeBuilder
     protected ?string $outrasDespesas = null;
     protected ?string $valorDescontoDocumento = null;
     protected ?string $informacoesComplementares = null;
+    protected ?TransporteDocumento $transporte = null;
 
     public static function make(): static
     {
@@ -215,6 +237,14 @@ class NfeBuilder
         return $this;
     }
 
+    /** Grupo transp (v2 §7) — modalidade, transportadora e volumes. */
+    public function transporte(TransporteDocumento $transporte): static
+    {
+        $this->transporte = $transporte;
+
+        return $this;
+    }
+
     /**
      * @throws ValidationException
      * @throws TaxInconsistencyException
@@ -223,20 +253,52 @@ class NfeBuilder
     {
         $erros = [];
 
-        if ($this->serie < 1 || $this->serie > 999) {
-            $erros['serie'][] = 'Série deve estar entre 1 e 999.';
+        if ($this->serie < 0 || $this->serie > 999) {
+            $erros['serie'][] = 'Série deve estar entre 0 e 999.';
         }
         if ($this->naturezaOperacao === null || trim($this->naturezaOperacao) === '') {
             $erros['naturezaOperacao'][] = 'Natureza da operação é obrigatória.';
+        } elseif (mb_strlen($this->naturezaOperacao) > 60) {
+            $erros['naturezaOperacao'][] = 'Natureza da operação deve ter no máximo 60 caracteres (natOp).';
         }
         if ($this->itens === []) {
             $erros['itens'][] = 'A nota deve ter ao menos um item.';
+        }
+        if ($this->modeloDocumento() === ModeloDocumento::Nfe && $this->destinatario === null) {
+            $erros['destinatario'][] = 'NF-e (modelo 55) exige destinatário identificado.';
+        }
+        if ($this->informacoesComplementares !== null && mb_strlen($this->informacoesComplementares) > 5000) {
+            $erros['informacoesComplementares'][] = 'Informações complementares devem ter no máximo 5000 caracteres (infCpl).';
         }
 
         foreach ($this->itens as $i => $item) {
             $esperado = Matematica::multiplicar($item->quantidade, $item->valorUnitario, 2);
             if (! Matematica::igual($esperado, $item->valorTotal)) {
                 $erros["itens[{$i}].valorTotal"][] = "Quantidade × valorUnitario ({$esperado}) difere do valorTotal ({$item->valorTotal}).";
+            }
+            if (bccomp($item->quantidade, '0', 4) <= 0) {
+                $erros["itens[{$i}].quantidade"][] = 'Quantidade deve ser maior que zero.';
+            }
+            if (bccomp($item->valorUnitario, '0', 10) <= 0) {
+                $erros["itens[{$i}].valorUnitario"][] = 'Valor unitário deve ser maior que zero.';
+            }
+            if (mb_strlen($item->codigo) > 60) {
+                $erros["itens[{$i}].codigo"][] = 'Código do produto deve ter no máximo 60 caracteres (cProd).';
+            }
+            if (mb_strlen($item->descricao) > 120) {
+                $erros["itens[{$i}].descricao"][] = 'Descrição do produto deve ter no máximo 120 caracteres (R015 — xProd).';
+            }
+            if ($item->ncm !== null && preg_match('/^\d{8}$/', $item->ncm) !== 1) {
+                $erros["itens[{$i}].ncm"][] = 'NCM deve ter exatamente 8 dígitos numéricos.';
+            }
+            if ($item->cest !== null && preg_match('/^\d{7}$/', $item->cest) !== 1) {
+                $erros["itens[{$i}].cest"][] = 'CEST deve ter exatamente 7 dígitos numéricos.';
+            }
+            if ($item->gtin !== null && preg_match('/^(SEM GTIN|\d{8}|\d{12}|\d{13}|\d{14})$/', $item->gtin) !== 1) {
+                $erros["itens[{$i}].gtin"][] = 'GTIN deve ter 8, 12, 13 ou 14 dígitos numéricos (ou "SEM GTIN").';
+            }
+            if ($item->unidade !== null && mb_strlen($item->unidade) > 6) {
+                $erros["itens[{$i}].unidade"][] = 'Unidade comercial deve ter no máximo 6 caracteres (uCom).';
             }
 
             // R001/R002 — coerência CFOP × tipo de operação.
@@ -253,6 +315,24 @@ class NfeBuilder
 
         if ($this->finalidade === FinalidadeNfe::Devolucao && $this->nfesReferenciadas === []) {
             $erros['nfesReferenciadas'][] = 'Devolução exige ao menos uma NF-e referenciada (v2 F4).';
+        }
+
+        // Cronograma LC 214/2025: após a virada, item com ICMS sem grupo IBS/CBS
+        // é rejeição na SEFAZ — antecipa no builder. Regime pelo código: CSOSN =
+        // Simples Nacional (prazo 2027); CST = regime normal (prazo 08/2026).
+        $hoje = $this->hoje();
+        foreach ($this->itens as $i => $item) {
+            $icms = $item->tributos?->icms;
+            if ($this->ibsCbsDispensavel || $icms === null || $item->tributos->ibsCbs !== null) {
+                continue;
+            }
+            $prazo = $icms->csosn !== null
+                ? self::IBSCBS_OBRIGATORIO_SIMPLES_DESDE
+                : self::IBSCBS_OBRIGATORIO_REGIME_NORMAL_DESDE;
+            if (strcmp($hoje, $prazo) >= 0) {
+                $erros["itens[{$i}].impostosV2.ibsCbs"][] =
+                    "Grupo IBS/CBS obrigatório desde {$prazo} (cronograma LC 214/2025).";
+            }
         }
 
         foreach ($this->pagamentos as $p) {
@@ -293,12 +373,19 @@ class NfeBuilder
             informacoesComplementares: $this->informacoesComplementares,
             indicadorIntermediador: $this->indicadorIntermediador,
             cnpjIntermediador: $this->cnpjIntermediador,
+            transporte: $this->transporte,
         );
     }
 
     protected function modeloDocumento(): ModeloDocumento
     {
         return ModeloDocumento::Nfe;
+    }
+
+    /** Data local de Brasília (ponto de injeção para testes de cronograma). */
+    protected function hoje(): string
+    {
+        return (new \DateTimeImmutable('today', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d');
     }
 
     /** Ganchos de validação do NFC-e builder. */

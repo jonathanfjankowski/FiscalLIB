@@ -59,6 +59,10 @@ final class NfceBuilder extends NfeBuilder
     {
         $erros = [];
 
+        if ($this->serie > 899) {
+            $erros['serie'][] = 'NFC-e: série 900–999 é reservada para contingência offline (R-NFC003).';
+        }
+
         if (bccomp($totais->valorNota, '200000.00', 2) === 1) {
             $erros['totais.valorNota'][] = 'NFC-e não pode exceder R$ 200.000,00 (R-NFC001).';
         }

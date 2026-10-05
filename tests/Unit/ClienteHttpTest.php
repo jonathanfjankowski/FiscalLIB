@@ -156,4 +156,24 @@ final class ClienteHttpTest extends TestCase
         self::assertFalse($resultado->isTerminal());
         self::assertSame(StatusDocumento::Pendente->value, 'PENDENTE');
     }
+
+    public function testMapeadorResultadoSemIdLancaExcecao(): void
+    {
+        $mapeador = new \FiscalLib\Adapters\FiscalApi\MapeadorResultado();
+
+        try {
+            $mapeador->paraResultadoEmissao(['status' => 'AUTORIZADA']);
+            self::fail('Resposta sem id deveria falhar alto.');
+        } catch (\FiscalLib\Exceptions\SerializationException $e) {
+            self::assertStringContainsString('id', $e->getMessage());
+        }
+    }
+
+    public function testMapeadorResultadoEventoSemEventoIdLancaExcecao(): void
+    {
+        $mapeador = new \FiscalLib\Adapters\FiscalApi\MapeadorResultado();
+
+        $this->expectException(\FiscalLib\Exceptions\SerializationException::class);
+        $mapeador->paraResultadoEvento(['tipo' => 'CANCELAMENTO', 'status' => 'APROVADO']);
+    }
 }

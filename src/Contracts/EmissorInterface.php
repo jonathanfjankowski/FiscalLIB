@@ -21,6 +21,13 @@ interface EmissorInterface
         ?OpcoesEmissao $opcoes = null,
     ): \FiscalLib\Documento\AceiteEmissao;
 
+    /**
+     * Reenvio de documento REJEITADO/DENEGADO/ERRO_INTERNO com payload
+     * corrigido: MESMO documento, MESMO número (rejeição não consome
+     * numeração na SEFAZ). A API recusa (409) documento autorizado/cancelado.
+     */
+    public function reenviar(string $documentoId, \FiscalLib\Documento\NfeDocumento|\FiscalLib\Documento\NfseDocumento $documento): \FiscalLib\Documento\AceiteEmissao;
+
     /** Estado atual do documento pelo id do aceite. */
     public function consultar(string $documentoId): \FiscalLib\Documento\ResultadoEmissao;
 

@@ -17,10 +17,14 @@ use FiscalLib\Documento\NfeDocumento;
 use FiscalLib\Documento\NfseDocumento;
 use FiscalLib\Documento\ServicoFiscal;
 use FiscalLib\Documento\Tomador;
+use FiscalLib\Documento\TransportadoraDocumento;
+use FiscalLib\Documento\TransporteDocumento;
+use FiscalLib\Documento\VolumeDocumento;
 use FiscalLib\Nfe\NfeBuilder;
 use FiscalLib\Nfse\NfseBuilder;
 use FiscalLib\Tax\Contextos\NfseTaxContext;
 use FiscalLib\Tax\Resultados\ImpostoTrioResultado;
+use FiscalLib\Tax\Resultados\IbsCbsResultado;
 use FiscalLib\Tax\Resultados\IcmsResultado;
 use FiscalLib\Tax\Resultados\IcmsStResultado;
 use FiscalLib\Tax\Resultados\NfeTaxResultado;
@@ -52,6 +56,12 @@ final class MapeadorDocumentoTest extends TestCase
             ipi: new ImpostoTrioResultado(cst: '50', cEnq: '999', baseCalculo: '100.00', aliquota: '10.0000', valor: '10.00'),
             pis: new ImpostoTrioResultado(cst: '01', baseCalculo: '100.00', aliquota: '1.6500', valor: '1.65'),
             cofins: new ImpostoTrioResultado(cst: '01', baseCalculo: '100.00', aliquota: '7.6000', valor: '7.60'),
+            ibsCbs: new IbsCbsResultado(
+                cstIbsCbs: '000', cClassTrib: '000001', baseCalculo: '100.00',
+                aliquotaCbs: '0.9000', valorCbs: '0.90',
+                aliquotaIbsEstadual: '0.1000', valorIbsEstadual: '0.10',
+                aliquotaIbsMunicipal: '0.0000', valorIbsMunicipal: '0.00',
+            ),
         );
 
         $documento = NfeBuilder::nfe()
@@ -111,12 +121,25 @@ final class MapeadorDocumentoTest extends TestCase
                     'ipi' => ['cst' => '50', 'baseCalculo' => 100, 'aliquota' => 10, 'valor' => 10, 'cEnq' => '999'],
                     'pis' => ['cst' => '01', 'baseCalculo' => 100, 'aliquota' => 1.65, 'valor' => 1.65],
                     'cofins' => ['cst' => '01', 'baseCalculo' => 100, 'aliquota' => 7.6, 'valor' => 7.6],
+                    'ibsCbs' => [
+                        'cstIbsCbs' => '000',
+                        'cClassTrib' => '000001',
+                        'baseCalculo' => 100,
+                        'aliquotaCbs' => 0.9,
+                        'valorCbs' => 0.9,
+                        'aliquotaIbsEstadual' => 0.1,
+                        'valorIbsEstadual' => 0.1,
+                        'aliquotaIbsMunicipal' => 0,
+                        'valorIbsMunicipal' => 0,
+                    ],
                 ],
             ]],
             'totais' => [
                 'valorProdutos' => 100,
                 'valorNota' => 143.4, // 100 + frete 10 + ST 23.40 + IPI 10 (fórmula v2)
                 'valorFrete' => 10,
+                'valorIbs' => 0.1,    // conferência — IBS/CBS não compõem o valorNota
+                'valorCbs' => 0.9,
             ],
             'naturezaOperacao' => 'Venda de mercadoria',
             'finalidade' => 'normal',
@@ -158,6 +181,7 @@ final class MapeadorDocumentoTest extends TestCase
                     ->servico(1000)
                     ->iss(5, tributacao: 1, retencao: 2)
                     ->pisCofins('01', 0.65, 3.0)
+                    ->totalTributos('21.00', '18.00', '5.00')
             ))
             ->ibsCbs(new IbsCbsDps('000001', '101', '000001'))
             ->build();
@@ -196,6 +220,11 @@ final class MapeadorDocumentoTest extends TestCase
                     'aliquotaCofins' => 3,
                     'valorCofins' => 30,
                 ],
+                'totalTributos' => [
+                    'federal' => 21,
+                    'estadual' => 18,
+                    'municipal' => 5,
+                ],
             ],
             'dataCompetencia' => '2026-09-05',
             'ibscbs' => [
@@ -208,5 +237,87 @@ final class MapeadorDocumentoTest extends TestCase
         ];
 
         self::assertSame($esperado, $payload);
+    }
+
+    public function testTransporteEDesoneracaoNoJson(): void
+    {
+        $tributos = new NfeTaxResultado(
+            icms: new IcmsResultado(
+                origem: 0, cst: '40',
+                valorDesonerado: '18.00', motivoDesoneracao: '9',
+                codigoBeneficioFiscal: 'RBC1234567',
+            ),
+            ibsCbs: new IbsCbsResultado(
+                cstIbsCbs: '000', cClassTrib: '000001', baseCalculo: '100.00',
+                aliquotaCbs: '0.9000', valorCbs: '0.90',
+                aliquotaIbsEstadual: '0.1000', valorIbsEstadual: '0.10',
+                aliquotaIbsMunicipal: '0.0000', valorIbsMunicipal: '0.00',
+            ),
+        );
+
+        $documento = NfeBuilder::nfe()
+            ->ambiente(Ambiente::Homologacao)
+            ->serie(1)
+            ->naturezaOperacao('Venda com desoneração')
+            ->destinatario(new Destinatario(
+                Cnpj::criar('11444777000161'),
+                'Cliente Teste Ltda',
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP),
+            ))
+            ->addItem(new ItemFiscal(
+                codigo: 'SKU1',
+                descricao: 'Produto com ICMS desonerado',
+                quantidade: '1.0000',
+                valorUnitario: '100.00',
+                valorTotal: '100.00',
+                tributos: $tributos,
+                ncm: '12345678',
+                cfop: '5102',
+            ))
+            ->pagamento(FormaPagamento::Dinheiro, 82)
+            ->transporte(new TransporteDocumento(
+                modalidadeFrete: '0',
+                transportadora: new TransportadoraDocumento(
+                    cnpjCpf: '45997418000153', nome: 'Transportadora Teste', inscricaoEstadual: '12345678',
+                    logradouro: 'Rodovia BR-101, km 10', municipio: 'Curitiba', uf: 'PR',
+                ),
+                volumes: [
+                    new VolumeDocumento(
+                        quantidade: 2, especie: 'Caixa', marca: 'Okto', numeracao: '001-002',
+                        pesoLiquido: '10.50', pesoBruto: '11.00', lacres: ['LAC-1', 'LAC-2'],
+                    ),
+                ],
+            ))
+            ->build();
+
+        $payload = json_decode((string) json_encode($this->mapeador->paraEmissaoRequest($documento)), true);
+
+        self::assertSame([
+            'modalidadeFrete' => '0',
+            'transportadora' => [
+                'cnpjCpf' => '45997418000153',
+                'nome' => 'Transportadora Teste',
+                'inscricaoEstadual' => '12345678',
+                'enderecoLogradouro' => 'Rodovia BR-101, km 10',
+                'enderecoMunicipio' => 'Curitiba',
+                'enderecoUf' => 'PR',
+            ],
+            'volumes' => [[
+                'quantidade' => 2,
+                'especie' => 'Caixa',
+                'marca' => 'Okto',
+                'numeracao' => '001-002',
+                'pesoLiquido' => 10.5,
+                'pesoBruto' => 11,
+                'lacres' => [['numero' => 'LAC-1'], ['numero' => 'LAC-2']],
+            ]],
+        ], $payload['transporte']);
+
+        self::assertSame(18, $payload['itens'][0]['impostosV2']['icms']['valorDesonerado']);
+        self::assertSame('9', $payload['itens'][0]['impostosV2']['icms']['motivoDesoneracao']);
+        self::assertSame('RBC1234567', $payload['itens'][0]['impostosV2']['icms']['codigoBeneficioFiscal']);
+        // 100 bruto − 18 desonerado = 82 (desoneração ativa a fórmula v2)
+        self::assertSame(82, $payload['totais']['valorNota']);
+        self::assertSame(18, $payload['totais']['valorDesonerado']);
     }
 }

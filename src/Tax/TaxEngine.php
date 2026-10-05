@@ -37,6 +37,8 @@ final class TaxEngine implements TaxEngineInterface
 {
     public function calcularNfe(NfeTaxContext $ctx): NfeTaxResultado
     {
+        $this->validarFaixasNfe($ctx);
+
         return new NfeTaxResultado(
             icms: $this->calcularIcms($ctx),
             ipi: $this->calcularIpi($ctx),
@@ -49,10 +51,15 @@ final class TaxEngine implements TaxEngineInterface
 
     public function calcularNfse(NfseTaxContext $ctx): NfseTaxResultado
     {
+        $this->validarFaixasNfse($ctx);
+
         $basePisCofins = $ctx->baseTributaria();
 
         $valorIssqn = null;
-        if ($ctx->aliquotaIssqn !== null && $ctx->tributacaoIssqn === 1) {
+        if ($ctx->tributacaoIssqn === 1) {
+            if ($ctx->aliquotaIssqn === null) {
+                throw MissingFieldException::campo('aliquotaIssqn', 'NFS-e tributável (tributacaoIssqn = 1)');
+            }
             $valorIssqn = Matematica::percentualDe($ctx->baseTributaria(), $ctx->aliquotaIssqn);
         }
 
@@ -76,9 +83,9 @@ final class TaxEngine implements TaxEngineInterface
             valorIssqn: $valorIssqn,
             cstPisCofins: $ctx->cstPisCofins,
             baseCalculoPisCofins: $ctx->cstPisCofins === null ? null : $basePisCofins,
-            aliquotaPis: $ctx->aliquotaPis,
+            aliquotaPis: $this->pct($ctx->aliquotaPis),
             valorPis: $valorPis,
-            aliquotaCofins: $ctx->aliquotaCofins,
+            aliquotaCofins: $this->pct($ctx->aliquotaCofins),
             valorCofins: $valorCofins,
             tipoRetencaoPisCofins: $ctx->tipoRetencaoPisCofins,
             valorRetidoCpp: $ctx->valorRetidoCpp,
@@ -88,6 +95,131 @@ final class TaxEngine implements TaxEngineInterface
             totalTributosEstadual: $ctx->totalTributosEstadual,
             totalTributosMunicipal: $ctx->totalTributosMunicipal,
         );
+    }
+
+    // ------------------------------------------------------------------ faixas
+
+    /**
+     * Percentual/valor fora da faixa produz base ou imposto impossível
+     * (negativo, maior que a base). Falha alta na entrada — nunca valor
+     * negativo silencioso esperando rejeição da SEFAZ.
+     */
+    private function validarFaixasNfe(NfeTaxContext $ctx): void
+    {
+        $this->exigirNaoNegativo('quantidade', $ctx->quantidade);
+        $this->exigirNaoNegativo('valorUnitario', $ctx->valorUnitario);
+        $this->exigirNaoNegativo('valorBruto', $ctx->valorBruto);
+        $this->exigirNaoNegativo('valorDesconto', $ctx->valorDesconto);
+        if (Matematica::comparar($ctx->valorDesconto, $ctx->valorBruto, 2) > 0) {
+            throw new TaxInconsistencyException(
+                "valorDesconto ({$ctx->valorDesconto}) maior que valorBruto ({$ctx->valorBruto})."
+            );
+        }
+
+        $this->exigirPercentual('aliquotaIcms', $ctx->aliquotaIcms);
+        $this->exigirPercentual('percentualReducaoBc', $ctx->percentualReducaoBc);
+        $this->exigirPercentual('aliquotaFcp', $ctx->aliquotaFcp);
+        $this->exigirPercentual('percentualCreditoSimples', $ctx->percentualCreditoSimples);
+        // MVA adiciona margem à base e pode exceder 100% na legislação do ST.
+        $this->exigirNaoNegativo('percentualMva', $ctx->percentualMva);
+        $this->exigirPercentual('percentualReducaoBcSt', $ctx->percentualReducaoBcSt);
+        $this->exigirPercentual('aliquotaIcmsSt', $ctx->aliquotaIcmsSt);
+        $this->exigirPercentual('aliquotaFcpSt', $ctx->aliquotaFcpSt);
+        $this->exigirPercentual('percentualDiferimento', $ctx->percentualDiferimento);
+
+        $this->exigirNaoNegativo('baseCalculoStRetida', $ctx->baseCalculoStRetida);
+        $this->exigirPercentual('aliquotaStRetida', $ctx->aliquotaStRetida);
+        $this->exigirNaoNegativo('valorStRetido', $ctx->valorStRetido);
+        $this->exigirNaoNegativo('valorIcmsSubstituto', $ctx->valorIcmsSubstituto);
+        $this->exigirPercentual('fcpPercentualStRetido', $ctx->fcpPercentualStRetido);
+        $this->exigirNaoNegativo('valorFcpStRetido', $ctx->valorFcpStRetido);
+
+        $this->exigirPercentual('aliquotaInternaUfDestino', $ctx->aliquotaInternaUfDestino);
+        $this->exigirPercentual('aliquotaFcpUfDestino', $ctx->aliquotaFcpUfDestino);
+        $this->exigirPercentual('aliquotaIpi', $ctx->aliquotaIpi);
+        $this->exigirPercentual('aliquotaPis', $ctx->aliquotaPis);
+        $this->exigirPercentual('aliquotaCofins', $ctx->aliquotaCofins);
+
+        if ($ctx->motivoDesoneracao !== null
+            && ! in_array($ctx->motivoDesoneracao, ['3', '9', '12'], true)) {
+            throw new TaxInconsistencyException(
+                "motivoDesoneracao '{$ctx->motivoDesoneracao}' fora do domínio do layout (3, 9, 12)."
+            );
+        }
+        if ($ctx->codigoBeneficioFiscal !== null
+            && ($ctx->codigoBeneficioFiscal === '' || mb_strlen($ctx->codigoBeneficioFiscal) > 10)) {
+            throw new TaxInconsistencyException('codigoBeneficioFiscal deve ter entre 1 e 10 posições.');
+        }
+
+        if ($ctx->ibsCbs !== null) {
+            $this->exigirPercentual('aliquotaCbs', $ctx->ibsCbs->aliquotaCbs);
+            $this->exigirPercentual('aliquotaIbsEstadual', $ctx->ibsCbs->aliquotaIbsEstadual);
+            $this->exigirPercentual('aliquotaIbsMunicipal', $ctx->ibsCbs->aliquotaIbsMunicipal);
+            $this->exigirPercentual('percentualReducaoCbs', $ctx->ibsCbs->percentualReducaoCbs);
+            $this->exigirPercentual('percentualReducaoIbsEstadual', $ctx->ibsCbs->percentualReducaoIbsEstadual);
+            $this->exigirPercentual('percentualReducaoIbsMunicipal', $ctx->ibsCbs->percentualReducaoIbsMunicipal);
+        }
+        if ($ctx->is !== null) {
+            $this->exigirPercentual('aliquotaIs', $ctx->is->aliquota);
+            $this->exigirNaoNegativo('baseCalculoOverride', $ctx->is->baseCalculoOverride);
+        }
+    }
+
+    private function validarFaixasNfse(NfseTaxContext $ctx): void
+    {
+        $this->exigirNaoNegativo('valorServicos', $ctx->valorServicos);
+        $this->exigirNaoNegativo('descontoIncondicionado', $ctx->descontoIncondicionado);
+        if (Matematica::comparar($ctx->descontoIncondicionado, $ctx->valorServicos, 2) > 0) {
+            throw new TaxInconsistencyException(
+                "descontoIncondicionado ({$ctx->descontoIncondicionado}) maior que valorServicos ({$ctx->valorServicos})."
+            );
+        }
+        $this->exigirNaoNegativo('valorRecebido', $ctx->valorRecebido);
+        $this->exigirPercentual('aliquotaIssqn', $ctx->aliquotaIssqn);
+        $this->exigirPercentual('aliquotaPis', $ctx->aliquotaPis);
+        $this->exigirPercentual('aliquotaCofins', $ctx->aliquotaCofins);
+        $this->exigirNaoNegativo('valorRetidoCpp', $ctx->valorRetidoCpp);
+        $this->exigirNaoNegativo('valorRetidoIrrf', $ctx->valorRetidoIrrf);
+        $this->exigirNaoNegativo('valorRetidoCsll', $ctx->valorRetidoCsll);
+        $this->exigirNaoNegativo('totalTributosFederal', $ctx->totalTributosFederal);
+        $this->exigirNaoNegativo('totalTributosEstadual', $ctx->totalTributosEstadual);
+        $this->exigirNaoNegativo('totalTributosMunicipal', $ctx->totalTributosMunicipal);
+
+        // Domínios — no NF-e os códigos são enums (não compilam fora do contrato);
+        // aqui a entrada é primitiva, então a validação é explícita.
+        if (! in_array($ctx->tributacaoIssqn, [1, 2, 3, 4], true)) {
+            throw new TaxInconsistencyException("tributacaoIssqn fora do domínio 1–4: '{$ctx->tributacaoIssqn}'.");
+        }
+        if (! in_array($ctx->retencaoIssqn, [1, 2, 3], true)) {
+            throw new TaxInconsistencyException("retencaoIssqn fora do domínio 1–3: '{$ctx->retencaoIssqn}'.");
+        }
+        if ($ctx->tipoRetencaoPisCofins !== null
+            && ! in_array($ctx->tipoRetencaoPisCofins, [1, 2, 3], true)) {
+            throw new TaxInconsistencyException("tipoRetencaoPisCofins fora do domínio 1–3: '{$ctx->tipoRetencaoPisCofins}'.");
+        }
+        if ($ctx->cstPisCofins !== null
+            && ! in_array($ctx->cstPisCofins, array_map(static fn (CstPisCofins $c): string => $c->value, CstPisCofins::cases()), true)) {
+            throw new TaxInconsistencyException(
+                "cstPisCofins '{$ctx->cstPisCofins}' fora do contrato (tabela CST PIS/COFINS — ex.: 03 é monofásico por quantidade)."
+            );
+        }
+    }
+
+    private function exigirPercentual(string $campo, ?string $valor): void
+    {
+        if ($valor === null) {
+            return;
+        }
+        if (Matematica::comparar($valor, '0', 4) < 0 || Matematica::comparar($valor, '100', 4) > 0) {
+            throw new TaxInconsistencyException("{$campo} fora da faixa 0–100: '{$valor}'.");
+        }
+    }
+
+    private function exigirNaoNegativo(string $campo, ?string $valor): void
+    {
+        if ($valor !== null && Matematica::comparar($valor, '0', 4) < 0) {
+            throw new TaxInconsistencyException("{$campo} negativo: '{$valor}'.");
+        }
     }
 
     // ------------------------------------------------------------------ ICMS
@@ -101,17 +233,38 @@ final class TaxEngine implements TaxEngineInterface
             throw TaxInconsistencyException::combinacaoNaoSuportada('informe cst OU csosn — nunca os dois.');
         }
 
-        if ($ctx->cst !== null) {
-            return $this->icmsPorCst($ctx);
+        // DIFAL só existe em operação tributada interestadual p/ consumidor final;
+        // pCredSN só existe no Simples Nacional (CSOSN 101/201/900). Informar em
+        // outro contexto é dado que seria descartado em silêncio — falha alta.
+        if ($ctx->difal && $this->difalNaoAdmitido($ctx)) {
+            throw TaxInconsistencyException::combinacaoNaoSuportada(
+                'DIFAL não se aplica a este CST/CSOSN (somente CST 00/10/20/51/70/90 e CSOSN 900).'
+            );
+        }
+        if ($ctx->percentualCreditoSimples !== null && $this->creditoSimplesNaoAdmitido($ctx)) {
+            throw TaxInconsistencyException::combinacaoNaoSuportada(
+                'percentualCreditoSimples (pCredSN) só existe no Simples Nacional — CSOSN 101/201/900.'
+            );
         }
 
-        return $this->icmsPorCsosn($ctx);
+        if ($ctx->cst !== null) {
+            return $this->comBeneficioFiscal($ctx, $this->icmsPorCst($ctx));
+        }
+
+        if ($ctx->motivoDesoneracao !== null) {
+            throw TaxInconsistencyException::combinacaoNaoSuportada(
+                'desoneração (motDesICMS) não se aplica ao Simples Nacional — informe um CST de regime normal.'
+            );
+        }
+
+        return $this->comBeneficioFiscal($ctx, $this->icmsPorCsosn($ctx));
     }
 
     private function icmsPorCst(NfeTaxContext $ctx): IcmsResultado
     {
         $cst = $ctx->cst;
         \assert($cst !== null);
+        $this->exigirDesoneracaoAdmissivel($ctx);
 
         $basePropria = $ctx->basePropria();
 
@@ -124,6 +277,10 @@ final class TaxEngine implements TaxEngineInterface
                 return $this->icmsTributado($ctx, $basePropria, null);
 
             case CstIcms::TributadaComCobrancaIcmsPorSt:
+                if ($ctx->percentualReducaoBc !== null) {
+                    throw TaxInconsistencyException::combinacaoNaoSuportada('CST 10 não admite redução de BC — use CST 70.');
+                }
+
                 return $this->icmsTributado($ctx, $basePropria, $this->stPropria($ctx, $basePropria));
 
             case CstIcms::ComReducaoDeBaseDeCalculo:
@@ -135,7 +292,18 @@ final class TaxEngine implements TaxEngineInterface
 
             case CstIcms::Isenta:
             case CstIcms::NaoTributada:
-                return new IcmsResultado(origem: $ctx->origem->value, cst: $cst->value);
+                $desonerado = $this->valorDesonerado($ctx, null);
+
+                return new IcmsResultado(
+                    origem: $ctx->origem->value,
+                    cst: $cst->value,
+                    // Com desoneração, base+alíquota acompanham o resultado para a
+                    // API conferir a aritmética (o XML do ICMS40 não as emite).
+                    baseCalculo: $desonerado === null ? null : $basePropria,
+                    aliquota: $desonerado === null ? null : ArredondadorBancario::arredondar((string) $ctx->aliquotaIcms, 4),
+                    valorDesonerado: $desonerado,
+                    motivoDesoneracao: $ctx->motivoDesoneracao,
+                );
 
             case CstIcms::Diferimento:
                 if ($ctx->aliquotaIcms === null) {
@@ -148,7 +316,10 @@ final class TaxEngine implements TaxEngineInterface
 
                 // `valor` só pode ir quando não há diferimento — o validador da
                 // API exige valor = base × alíquota, que só vale sem diferimento.
-                $valor = bccomp($percentualDif, '0', 2) === 0 ? $valorOperacao : null;
+                // Percentuais têm 4 casas no contrato: comparar em 2 esconderia
+                // diferimentos < 0,005.
+                $semDiferimento = bccomp($percentualDif, '0', 4) === 0;
+                $valor = $semDiferimento ? $valorOperacao : null;
 
                 return new IcmsResultado(
                     origem: $ctx->origem->value,
@@ -162,7 +333,7 @@ final class TaxEngine implements TaxEngineInterface
                     valorFcp: $ctx->aliquotaFcp === null ? null : Matematica::percentualDe($base, $ctx->aliquotaFcp),
                     valorIcmsOperacao: $valorOperacao,
                     percentualDiferimento: $this->pct($ctx->percentualDiferimento),
-                    valorIcmsDiferido: bccomp($percentualDif, '0', 2) === 0 ? null : $valorDiferido,
+                    valorIcmsDiferido: $semDiferimento ? null : $valorDiferido,
                     difal: $this->difalSeAplicavel($ctx, $base),
                 );
 
@@ -186,6 +357,7 @@ final class TaxEngine implements TaxEngineInterface
                 $st = $ctx->modBcSt !== null ? $this->stPropria($ctx, $base)
                     : ($ctx->baseCalculoStRetida !== null ? $this->stRetida($ctx) : null);
                 $trio = $ctx->aliquotaIcms !== null;
+                $valorIcms = $trio ? Matematica::percentualDe($base, (string) $ctx->aliquotaIcms) : null;
 
                 return new IcmsResultado(
                     origem: $ctx->origem->value,
@@ -193,7 +365,9 @@ final class TaxEngine implements TaxEngineInterface
                     modBc: $trio ? $ctx->modBc->value : null,
                     baseCalculo: $trio ? $base : null,
                     aliquota: $trio ? ArredondadorBancario::arredondar((string) $ctx->aliquotaIcms, 4) : null,
-                    valor: $trio ? Matematica::percentualDe($base, (string) $ctx->aliquotaIcms) : null,
+                    valor: $valorIcms,
+                    valorDesonerado: $this->valorDesonerado($ctx, $valorIcms),
+                    motivoDesoneracao: $ctx->motivoDesoneracao,
                     percentualReducaoBc: $this->pct($ctx->percentualReducaoBc),
                     fcpPercentual: $this->pct($ctx->aliquotaFcp),
                     valorFcp: $ctx->aliquotaFcp === null || ! $trio ? null : Matematica::percentualDe($base, $ctx->aliquotaFcp),
@@ -227,7 +401,7 @@ final class TaxEngine implements TaxEngineInterface
                 return new IcmsResultado(
                     origem: $ctx->origem->value,
                     csosn: $csosn->value,
-                    percentualCreditoSimples: $ctx->percentualCreditoSimples,
+                    percentualCreditoSimples: $this->pct($ctx->percentualCreditoSimples),
                     valorCreditoSimples: $credito,
                 );
 
@@ -235,7 +409,7 @@ final class TaxEngine implements TaxEngineInterface
                 return new IcmsResultado(
                     origem: $ctx->origem->value,
                     csosn: $csosn->value,
-                    percentualCreditoSimples: $ctx->percentualCreditoSimples,
+                    percentualCreditoSimples: $this->pct($ctx->percentualCreditoSimples),
                     valorCreditoSimples: $credito,
                     st: $this->stPropria($ctx, $basePropria),
                 );
@@ -282,6 +456,30 @@ final class TaxEngine implements TaxEngineInterface
         }
     }
 
+    /** DIFAL inadmissível: CST/CSOSN sem tributação própria interestadual. */
+    private function difalNaoAdmitido(NfeTaxContext $ctx): bool
+    {
+        if ($ctx->cst !== null) {
+            return in_array($ctx->cst, [CstIcms::Isenta, CstIcms::NaoTributada, CstIcms::IcmsCobradoAnteriormentePorSt], true);
+        }
+
+        return $ctx->csosn !== Csosn::Outros;
+    }
+
+    /** pCredSN só existe no Simples Nacional — CSOSN 101/201/900. */
+    private function creditoSimplesNaoAdmitido(NfeTaxContext $ctx): bool
+    {
+        if ($ctx->cst !== null) {
+            return true;
+        }
+
+        return ! in_array(
+            $ctx->csosn,
+            [Csosn::TributadaComPermissaoDeCredito, Csosn::TributadaComPermissaoDeCreditoECobrancaPorSt, Csosn::Outros],
+            true,
+        );
+    }
+
     /** Normaliza percentuais em 4 casas (contrato trata percentuais como decimais). */
     private function pct(?string $valor): ?string
     {
@@ -293,6 +491,7 @@ final class TaxEngine implements TaxEngineInterface
         if ($ctx->aliquotaIcms === null) {
             throw MissingFieldException::campo('aliquotaIcms', 'CST tributado');
         }
+        $valor = Matematica::percentualDe($base, $ctx->aliquotaIcms);
 
         return new IcmsResultado(
             origem: $ctx->origem->value,
@@ -300,13 +499,67 @@ final class TaxEngine implements TaxEngineInterface
             modBc: $ctx->modBc->value,
             baseCalculo: $base,
             aliquota: ArredondadorBancario::arredondar($ctx->aliquotaIcms, 4),
-            valor: Matematica::percentualDe($base, $ctx->aliquotaIcms),
+            valor: $valor,
+            valorDesonerado: $this->valorDesonerado($ctx, $valor),
+            motivoDesoneracao: $ctx->motivoDesoneracao,
             percentualReducaoBc: $this->pct($ctx->percentualReducaoBc),
             fcpPercentual: $this->pct($ctx->aliquotaFcp),
             valorFcp: $ctx->aliquotaFcp === null ? null : Matematica::percentualDe($base, $ctx->aliquotaFcp),
             st: $st,
             difal: $this->difalSeAplicavel($ctx, $base),
         );
+    }
+
+    /**
+     * vICMSDeson (NT 2019.001): o ICMS que seria devido sem a desoneração —
+     * base cheia × alíquota menos o ICMS destacado (zero nos CSTs que não
+     * destacam, como 40/41). Sem motivo informado, não há desoneração.
+     */
+    private function valorDesonerado(NfeTaxContext $ctx, ?string $valorIcms): ?string
+    {
+        if ($ctx->motivoDesoneracao === null) {
+            return null;
+        }
+        if ($ctx->aliquotaIcms === null) {
+            throw MissingFieldException::campo('aliquotaIcms', "desoneração (motDesICMS {$ctx->motivoDesoneracao})");
+        }
+        $cheio = Matematica::percentualDe($ctx->basePropria(), $ctx->aliquotaIcms);
+
+        return Matematica::subtrair($cheio, $valorIcms ?? '0.00', 2);
+    }
+
+    /** Desoneração só nos CSTs que o layout admite — nos demais, motivo informado é falha alta. */
+    private function exigirDesoneracaoAdmissivel(NfeTaxContext $ctx): void
+    {
+        if ($ctx->motivoDesoneracao === null) {
+            return;
+        }
+        $admissivel = $ctx->cst !== null && in_array(
+            $ctx->cst,
+            [
+                CstIcms::ComReducaoDeBaseDeCalculo,
+                CstIcms::Isenta,
+                CstIcms::NaoTributada,
+                CstIcms::ComReducaoDeBaseECobrancaPorSt,
+                CstIcms::Outros,
+            ],
+            true,
+        );
+        if (! $admissivel) {
+            throw TaxInconsistencyException::combinacaoNaoSuportada(
+                'desoneração (motDesICMS) só se aplica a CST 20/40/41/70/90.'
+            );
+        }
+    }
+
+    /** Propaga o cBenef para o resultado (re-instância preservando os campos). */
+    private function comBeneficioFiscal(NfeTaxContext $ctx, IcmsResultado $resultado): IcmsResultado
+    {
+        if ($ctx->codigoBeneficioFiscal === null) {
+            return $resultado;
+        }
+
+        return $resultado->comCodigoBeneficioFiscal($ctx->codigoBeneficioFiscal);
     }
 
     private function stPropria(NfeTaxContext $ctx, string $basePropria): IcmsStResultado
@@ -330,7 +583,7 @@ final class TaxEngine implements TaxEngineInterface
             baseCalculoSt: $baseSt,
             aliquotaSt: ArredondadorBancario::arredondar($ctx->aliquotaIcmsSt, 4),
             valorSt: Matematica::percentualDe($baseSt, $ctx->aliquotaIcmsSt),
-            fcpPercentualSt: $ctx->aliquotaFcpSt,
+            fcpPercentualSt: $this->pct($ctx->aliquotaFcpSt),
             valorFcpSt: $ctx->aliquotaFcpSt === null ? null : Matematica::percentualDe($baseSt, $ctx->aliquotaFcpSt),
         );
     }
@@ -348,7 +601,7 @@ final class TaxEngine implements TaxEngineInterface
             aliquotaStRetida: ArredondadorBancario::arredondar($ctx->aliquotaStRetida, 4),
             valorStRetido: $valorStRetido,
             valorIcmsSubstituto: $ctx->valorIcmsSubstituto,
-            fcpPercentualStRetido: $ctx->fcpPercentualStRetido,
+            fcpPercentualStRetido: $this->pct($ctx->fcpPercentualStRetido),
             valorFcpStRetido: $ctx->fcpPercentualStRetido === null
                 ? null
                 : Matematica::percentualDe($ctx->baseCalculoStRetida, $ctx->fcpPercentualStRetido),
@@ -370,6 +623,12 @@ final class TaxEngine implements TaxEngineInterface
         $interna = $ctx->aliquotaInternaUfDestino;
         $interestadual = (string) $ctx->aliquotaInterestadual;
 
+        if (Matematica::comparar($interna, $interestadual, 4) < 0) {
+            throw new TaxInconsistencyException(
+                "DIFAL: alíquota interna da UF de destino ({$interna}) menor que a interestadual ({$interestadual}) — vICMSUFDest seria negativo."
+            );
+        }
+
         // MOC (rejeições 815/816): vICMSUFDest = BC × (interna − interestadual) —
         // o ICMS próprio já remete BC × interestadual à UF de origem. Partilha
         // 100% destino desde 2019 → vICMSUFRemet = 0.
@@ -381,7 +640,7 @@ final class TaxEngine implements TaxEngineInterface
             aliquotaDestino: ArredondadorBancario::arredondar($interna, 4),
             valorIcmsDestino: Matematica::percentualDe($base, $diferenca),
             valorIcmsOrigem: '0.00',
-            fcpPercentualDestino: $ctx->aliquotaFcpUfDestino,
+            fcpPercentualDestino: $this->pct($ctx->aliquotaFcpUfDestino),
             valorFcpDestino: $ctx->aliquotaFcpUfDestino === null ? null : Matematica::percentualDe($base, $ctx->aliquotaFcpUfDestino),
         );
     }

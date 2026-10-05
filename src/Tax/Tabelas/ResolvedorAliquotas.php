@@ -57,9 +57,13 @@ final class ResolvedorAliquotas
         'SP' => '2.00', 'TO' => '2.00',
     ];
 
-    /** Ano => alíquotas IBS/CBS definidas em lei (LC 214/2025 art. 348 — fase-teste 2026, informativas). */
+    /**
+     * Ano => alíquotas IBS/CBS definidas em lei (LC 214/2025 art. 348 — fase-teste 2026, informativas).
+     * IBS 0,1% vai integralmente para a UF: a SEFAZ rejeita a divisão 0,05/0,05
+     * com 1026 (alíquota do IBS da UF inválida).
+     */
     private const IBS_CBS = [
-        2026 => ['cbs' => '0.90', 'ibsUf' => '0.05', 'ibsMun' => '0.05'],
+        2026 => ['cbs' => '0.90', 'ibsUf' => '0.10', 'ibsMun' => '0.00'],
     ];
 
     /** @var array<string, string> */

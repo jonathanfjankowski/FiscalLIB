@@ -43,6 +43,16 @@ class EmissorFake implements EmissorInterface
         return new AceiteEmissao('doc-1', 'PENDENTE', $documento->ambiente->value, null, '/v1/documentos-fiscais/doc-1');
     }
 
+    /** @var list<array{documentoId: string, documento: NfeDocumento|NfseDocumento}> */
+    public array $reenvios = [];
+
+    public function reenviar(string $documentoId, NfeDocumento|NfseDocumento $documento): AceiteEmissao
+    {
+        $this->reenvios[] = ['documentoId' => $documentoId, 'documento' => $documento];
+
+        return new AceiteEmissao($documentoId, 'PENDENTE', $documento->ambiente->value, null, "/v1/documentos-fiscais/{$documentoId}");
+    }
+
     public function consultar(string $documentoId): ResultadoEmissao
     {
         if ($this->filaConsultas !== []) {

@@ -53,4 +53,10 @@ final class NfeTaxResultado
     {
         return $this->icms->valorFcp ?? '0.00';
     }
+
+    /** vICMSDeson do item (subtrai do total da nota). */
+    public function totalDesonerado(): string
+    {
+        return $this->icms->valorDesonerado ?? '0.00';
+    }
 }
