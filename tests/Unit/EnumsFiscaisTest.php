@@ -59,6 +59,6 @@ final class EnumsFiscaisTest extends TestCase
         self::assertSame(['01', '02'], array_values(array_map(static fn (CstPisCofins $c): string => $c->value, $exigemAliquota)));
 
         $opcionais = array_filter(CstPisCofins::cases(), static fn (CstPisCofins $c): bool => $c->admiteAliquotaOpcional());
-        self::assertSame(['99'], array_values(array_map(static fn (CstPisCofins $c): string => $c->value, $opcionais)));
+        self::assertSame(['49', '99'], array_values(array_map(static fn (CstPisCofins $c): string => $c->value, $opcionais)));
     }
 }
