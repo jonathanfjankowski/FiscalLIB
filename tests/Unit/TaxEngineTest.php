@@ -223,6 +223,20 @@ final class TaxEngineTest extends TestCase
 
         self::assertSame('20.00', $r->pis->valor);
     }
+    public function testPisCofins49OutrasSaidas(): void
+    {
+        // 49 = outras operações de saída: alíquota facultativa (sem alíquota = sem valores).
+        $r = $this->engine->calcularNfe(
+            $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
+                ->pis(CstPisCofins::OutrasOperacoesSaida)
+                ->cofins(CstPisCofins::OutrasOperacoesSaida, '3.00')
+        );
+
+        self::assertSame('49', $r->pis->cst);
+        self::assertNull($r->pis->valor);
+        self::assertSame('49', $r->cofins->cst);
+        self::assertSame('30.00', $r->cofins->valor);
+    }
 
     public function testIbsCbsPorFora(): void
     {

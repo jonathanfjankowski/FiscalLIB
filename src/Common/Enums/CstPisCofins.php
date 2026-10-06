@@ -18,6 +18,9 @@ enum CstPisCofins: string
     case OperacaoIsenta = '07';
     case OperacaoSemIncidencia = '08';
     case OperacaoComSuspensao = '09';
+    /** 49 = Outras operações de saida (tabela CST PIS/COFINS). */
+    case OutrasOperacoesSaida = '49';
+
     case OutrasOperacoes = '99';
 
     /** 01/02 exigem base × alíquota. */
@@ -26,9 +29,9 @@ enum CstPisCofins: string
         return in_array($this, [self::OperacaoTributavelCumulativo, self::OperacaoTributavelAliquotaDiferenciada], true);
     }
 
-    /** Somente o 99 aceita alíquota facultativa (sem alíquota → sem valores). */
+    /** 49/99 (outras operações) aceitam alíquota facultativa (sem alíquota = sem valores). */
     public function admiteAliquotaOpcional(): bool
     {
-        return $this === self::OutrasOperacoes;
+        return in_array($this, [self::OutrasOperacoesSaida, self::OutrasOperacoes], true);
     }
 }
