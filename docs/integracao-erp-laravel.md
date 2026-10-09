@@ -307,7 +307,7 @@ Construção fluent via `NfeTaxContext::make()`. Métodos reais:
 
 | Método | Assinatura | Para quê |
 |---|---|---|
-| `regime()` | `regime(RegimeTributario $regime): self` | CRT do emitente (1=SN, 2=SN excesso, 3=Normal) |
+| `regime()` | `regime(RegimeTributario $regime): self` | CRT do emitente (1=SN, 2=SN excesso, 3=Normal, 4=MEI) |
 | `cfop()` | `cfop(string $cfop): self` | CFOP do item |
 | `valores()` | `valores(string|int|float $quantidade, string|int|float $valorUnitario, string|int|float $desconto = 0): self` | calcula `valorBruto = qtd × unitário` (2 casas) e aplica desconto |
 | `valorBruto()` | `valorBruto(string|int|float $valor): self` | define o bruto diretamente |

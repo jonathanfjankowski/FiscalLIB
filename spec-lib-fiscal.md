@@ -528,7 +528,7 @@ O builder constrói um `NfePayload` tipado. Usa fluent interface e valida obriga
 | enderEmit completo | S | logradouro, nro, bairro, cMun, xMun, UF, CEP, cPais, xPais, fone |
 | IE | S | exceto para MEI e pessoa física |
 | IEST, IM, CNAE | N | |
-| CRT | S | 1=SN Microempresa, 2=SN Excesso, 3=Regime Normal |
+| CRT | S | 1=SN Microempresa, 2=SN Excesso, 3=Regime Normal, 4=MEI |
 
 #### Destinatário (dest)
 
