@@ -239,9 +239,73 @@ final class MapeadorDocumentoTest extends TestCase
         self::assertSame($esperado, $payload);
     }
 
-    public function testTransporteEDesoneracaoNoJson(): void
+    /**
+     * infCpl — informações complementares: o texto precisa CHEGAR ao payload
+     * da FiscalAPI (lá vira InfAdic/InfCpl no XML). O mapper escrevia em
+     * `$request` ANTES de `$request` existir — o array era sobrescrito logo
+     * depois e o texto sumia em silêncio: a nota saía sem as informações
+     * complementares e ninguém era avisado.
+     */
+    public function testInformacoesComplementaresChegamAoPayload(): void
     {
-        $tributos = new NfeTaxResultado(
+        $documento = NfeBuilder::nfe()
+            ->ambiente(Ambiente::Homologacao)
+            ->serie(1)
+            ->naturezaOperacao('Venda de mercadoria')
+            ->informacoesComplementares('Pedido 123 — entrega em 15 dias.')
+            ->destinatario(new Destinatario(
+                Cnpj::criar('11444777000161'),
+                'Cliente Teste Ltda',
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP),
+            ))
+            ->addItem(new ItemFiscal(
+                codigo: 'SKU1',
+                descricao: 'Produto de teste',
+                quantidade: '1.0000',
+                valorUnitario: '100.00',
+                valorTotal: '100.00',
+                ncm: '12345678',
+                cfop: '5102',
+            ))
+            ->pagamento(FormaPagamento::Dinheiro, 100)
+            ->build();
+
+        $payload = $this->mapeador->paraEmissaoRequest($documento);
+
+        self::assertSame('Pedido 123 — entrega em 15 dias.', $payload['informacoesComplementares']);
+    }
+
+    /** Sem infCpl, a chave não vai no payload (o contrato da API é nullable). */
+    public function testSemInformacoesComplementaresAChaveNaoVaiNoPayload(): void
+    {
+        $documento = NfeBuilder::nfe()
+            ->ambiente(Ambiente::Homologacao)
+            ->serie(1)
+            ->naturezaOperacao('Venda de mercadoria')
+            ->destinatario(new Destinatario(
+                Cnpj::criar('11444777000161'),
+                'Cliente Teste Ltda',
+                endereco: new Endereco(cep: '01001000', logradouro: 'Praça da Sé', numero: '1', bairro: 'Sé', codigoMunicipioIbge: '3550308', uf: UF::SP),
+            ))
+            ->addItem(new ItemFiscal(
+                codigo: 'SKU1',
+                descricao: 'Produto de teste',
+                quantidade: '1.0000',
+                valorUnitario: '100.00',
+                valorTotal: '100.00',
+                ncm: '12345678',
+                cfop: '5102',
+            ))
+            ->pagamento(FormaPagamento::Dinheiro, 100)
+            ->build();
+
+        $payload = $this->mapeador->paraEmissaoRequest($documento);
+
+        self::assertArrayNotHasKey('informacoesComplementares', $payload);
+    }
+
+    public function testTransporteEDesoneracaoNoJson(): void
+    {        $tributos = new NfeTaxResultado(
             icms: new IcmsResultado(
                 origem: 0, cst: '40',
                 valorDesonerado: '18.00', motivoDesoneracao: '9',
