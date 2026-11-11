@@ -989,9 +989,24 @@ $lib->gestao()?->configurarWebhooks(
 // GET disponível: $lib->gestao()?->webhooks()
 ```
 
-A FiscalAPI assina cada entrega com HMAC-SHA256 sobre `"{timestamp}.{corpo}"` no header
-`X-Fiscal-Signature` (formato `t=<unix_ts>,v1=<hex>`; a lib também aceita a variante
-`sha256=<hex>`), com janela anti-replay de 5 minutos. Valide com
+> A URL do webhook **tem de ser pública e em https** para tenant que não é
+> sandbox: a FiscalAPI recusa `http` (`ValidadorWebhookUrl`) porque o
+> segredo HMAC trafega no corpo da entrega. Instração on-premise (ERP e
+> FiscalAPI na mesma rede) tem o opt-out
+> `Fiscal:Webhooks:PermitirRedesPrivadas=true` no **worker** da FiscalAPI.
+```
+
+A FiscalAPI assina cada entrega com HMAC-SHA256 sobre `"{timestamp}.{corpo}"`, com
+janela anti-replay de 5 minutos. O timestamp chega de uma de DUAS formas — a
+lib aceita as duas:
+
+| Formato | `X-Fiscal-Signature` | `X-Fiscal-Timestamp` |
+|---|---|---|
+| FiscalAPI (produção) | `sha256=<hex>` | `<unix_ts>` — header **dedicado** |
+| Helper `header()` da lib | `t=<unix_ts>,v1=<hex>` | — |
+
+Passar o header dedicado é o que a FiscalAPI faz — sem ele, a entrega é
+recusada com 401 ("Assinatura de webhook malformada"). Valide com
 `FiscalLib\Webhook\VerificadorAssinaturaHmac` **sobre o corpo bruto**:
 
 ```php
@@ -1010,6 +1025,8 @@ Route::post('/webhooks/fiscal', function (Request $request) {
             $request->getContent(),                     // corpo BRUTO, antes de qualquer parse
             $request->header('X-Fiscal-Signature'),
             $secret,
+            // Formato da FiscalAPI: o timestamp vem no header dedicado.
+            timestampHeader: $request->header('X-Fiscal-Timestamp'),
         );
     } catch (FiscalLibException $e) {
         // 'Webhook sem assinatura (X-Fiscal-Signature).'
