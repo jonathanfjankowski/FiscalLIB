@@ -58,4 +58,58 @@ final class VerificadorAssinaturaHmacTest extends TestCase
         $this->expectException(FiscalLibException::class);
         VerificadorAssinaturaHmac::validar($this->corpo, null, self::SEGREDO);
     }
+
+    /**
+     * Formato que a FiscalAPI envia: `X-Fiscal-Signature: sha256=<hex>` com o
+     * timestamp no header DEDICADO (X-Fiscal-Timestamp). Sem aceitar esse
+     * formato, toda entrega era recusada com 401.
+     */
+    public function testFormatoDaFiscalApiComTimestampEmHeaderDedicatedPassa(): void
+    {
+        $timestamp = '1700000000';
+        $assinatura = VerificadorAssinaturaHmac::calcular($this->corpo, $timestamp, self::SEGREDO);
+
+        VerificadorAssinaturaHmac::validar(
+            $this->corpo,
+            'sha256='.$assinatura,
+            self::SEGREDO,
+            agora: 1_700_000_100,
+            timestampHeader: $timestamp,
+        );
+
+        self::addToAssertionCount(1); // não lançou
+    }
+
+    public function testFormatoDaFiscalApiSemTimestampDedicatedFalha(): void
+    {
+        $this->expectException(FiscalLibException::class);
+        $this->expectExceptionMessage('malformada');
+
+        $timestamp = '1700000000';
+        $assinatura = VerificadorAssinaturaHmac::calcular($this->corpo, $timestamp, self::SEGREDO);
+
+        VerificadorAssinaturaHmac::validar(
+            $this->corpo,
+            'sha256='.$assinatura,
+            self::SEGREDO,
+            agora: 1_700_000_100,
+        );
+    }
+
+    public function testFormatoDaFiscalApiForaDaJanelaAntiReplayFalha(): void
+    {
+        $this->expectException(FiscalLibException::class);
+        $this->expectExceptionMessage('anti-replay');
+
+        $timestamp = '1700000000';
+        $assinatura = VerificadorAssinaturaHmac::calcular($this->corpo, $timestamp, self::SEGREDO);
+
+        VerificadorAssinaturaHmac::validar(
+            $this->corpo,
+            'sha256='.$assinatura,
+            self::SEGREDO,
+            agora: 1_700_000_400,
+            timestampHeader: $timestamp,
+        );
+    }
 }
