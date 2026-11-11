@@ -561,7 +561,7 @@ public function frete(string|int|float $valor): static;
 public function seguro(string|int|float $valor): static;
 public function outrasDespesas(string|int|float $valor): static;
 public function descontoTotal(string|int|float $valor): static;                // desconto document-level
-public function informacoesComplementares(string $texto): static;              // ver limitação na seção 10
+public function informacoesComplementares(string $texto): static;              // infCpl — vai no payload (API → InfAdic/InfCpl)
 public function build(): NfeDocumento;                                          // lança ValidationException
 ```
 
@@ -1193,7 +1193,7 @@ Confirmados no código (`Tax\TaxEngine`, builders, adaptador) e em [fiscal-rules
 | 6 | CST `00` com redução de BC | `TaxInconsistencyException` ("use CST 20") |
 | 7 | CST `20/70` sem `percentualReducaoBc`; CST tributado sem `aliquotaIcms`; ST própria sem `modBcSt + aliquotaSt`; CST `60`/CSOSN `500` sem `baseCalculoStRetida + aliquotaStRetida` | `MissingFieldException` |
 | 8 | DIFAL sem `aliquotaInterestadual = 4/7/12` ou sem alíquota interna | `ValidationException` |
-| 9 | `informacoesComplementares` do `NfeDocumento` | **ignorado pela FiscalAPI** (não vai no payload do adaptador; comentário no próprio campo) — útil apenas para outros emissores |
+| 9 | `informacoesComplementares` do `NfeDocumento` | **vai no payload** (`informacoesComplementares`) — a FiscalAPI mapeia para `InfAdic/InfCpl` no XML. Exige a API com o campo no contrato `EmissaoRequest` (branch `dev`) |
 | 10 | `Emitente` no builder | não vai no payload da FiscalAPI (emitente vem do perfil do tenant) — serve para validação local/outros emissores |
 | 11 | Consulta de documento | apenas por `documentoId` (do aceite); não há consulta por chave de acesso na `EmissorInterface` |
 | 12 | Webhooks | só verificação HMAC; sem DTO/parsing do payload da entrega (seção 8.3) |

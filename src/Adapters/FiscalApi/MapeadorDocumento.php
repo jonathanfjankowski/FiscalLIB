@@ -24,13 +24,6 @@ final class MapeadorDocumento
 
     public function paraEmissaoRequest(NfeDocumento $documento): array
     {
-        // A API não transmite infCpl na NF-e: melhor falhar aqui do que o ERP
-        // acreditar que o texto chegou à nota (perda silenciosa).
-        // infCpl — a FiscalAPI transmite (v2 §8)
-        if ($documento->informacoesComplementares !== null) {
-            $request['informacoesComplementares'] = $documento->informacoesComplementares;
-        }
-
         $itens = [];
         foreach ($documento->itens as $item) {
             $itens[] = $this->paraItem($item);
@@ -95,6 +88,14 @@ final class MapeadorDocumento
 
         if ($documento->transporte !== null) {
             $request['transporte'] = $this->paraTransporte($documento->transporte);
+        }
+
+        // infCpl — informações complementares de interesse do fisco/contribuinte.
+        // A FiscalAPI mapeia para InfAdic/InfCpl no XML (EmissaoRequest).
+        // Precisa entrar DEPOIS do $request: escrever antes é descartado
+        // quando o array é reatribuído — o texto sumia em silêncio.
+        if ($documento->informacoesComplementares !== null) {
+            $request['informacoesComplementares'] = $documento->informacoesComplementares;
         }
 
         return $request;

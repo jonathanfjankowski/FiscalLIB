@@ -38,7 +38,7 @@ final class NfeDocumento
         public readonly ?Emitente $emitente = null,
         public readonly array $pagamentos = [],
         public readonly array $nfesReferenciadas = [],
-        public readonly ?string $informacoesComplementares = null, // ignorado pela FiscalAPI; útil p/ outros emissores
+        public readonly ?string $informacoesComplementares = null, // infCpl — vai no payload (API → InfAdic/InfCpl)
         public readonly ?IndicadorIntermediador $indicadorIntermediador = null, // NT 2020.006 (indIntermed) — só NF-e (55)
         public readonly ?string $cnpjIntermediador = null,    // obrigatório quando indicadorIntermediador = 1
         public readonly ?TransporteDocumento $transporte = null, // grupo transp (v2 §7)
