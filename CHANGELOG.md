@@ -7,6 +7,14 @@ quando a rejeição técnica é ativada.
 ## [Unreleased]
 
 ### Corrigido
+- **infCpl (informações complementares) nunca chegava à nota** — o
+  `MapeadorDocumento::paraEmissaoRequest()` escrevia
+  `$request['informacoesComplementares']` **antes** do array `$request` existir
+  (a atribuição do array vinha logo depois e sobrescrevia tudo): o texto era
+  descartado em silêncio e a NF-e/NFC-e saía sem as informações
+  complementares. Agora o campo entra no payload (a FiscalAPI mapeia para
+  `InfAdic/InfCpl` no XML — exige API com o campo no contrato
+  `EmissaoRequest`). Teste de contrato cobre o envio e a ausência do campo.
 - **`ResolvedorAliquotas::aliquotasIbsCbs(2026)`** — fase-teste 2026 passa a
   embutir IBS UF 0,10 / IBS Mun 0,00 (0,1% integral na UF). A divisão 0,05/0,05
   era rejeitada pela SEFAZ homologação com **1026** (alíquota do IBS da UF
