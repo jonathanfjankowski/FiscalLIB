@@ -63,10 +63,19 @@ final class MapeadorDocumento
         if ($documento->pagamentos !== []) {
             $pagamentos = [];
             foreach ($documento->pagamentos as $pagamento) {
-                $pagamentos[] = [
+                $pag = [
                     'forma' => $pagamento->formaCodigo(),
                     'valor' => self::num($pagamento->valor),
                 ];
+                if ($pagamento->cartao !== null) {
+                    $pag['tipoIntegracao'] = $pagamento->cartao->tipoIntegracao;
+                    $pag['bandeira'] = $pagamento->cartao->bandeira;
+                    $pag['autorizacao'] = $pagamento->cartao->autorizacao;
+                    if ($pagamento->cartao->cnpjCredenciadora !== null) {
+                        $pag['cnpjCredenciadora'] = $pagamento->cartao->cnpjCredenciadora;
+                    }
+                }
+                $pagamentos[] = $pag;
             }
             $request['pagamento'] = $pagamentos;
         }
@@ -96,6 +105,10 @@ final class MapeadorDocumento
         // quando o array é reatribuído — o texto sumia em silêncio.
         if ($documento->informacoesComplementares !== null) {
             $request['informacoesComplementares'] = $documento->informacoesComplementares;
+        }
+
+        if ($documento->contingenciaOffline) {
+            $request['contingenciaOffline'] = true;
         }
 
         return $request;
@@ -199,6 +212,51 @@ final class MapeadorDocumento
         $impostosV2 = $item->tributos?->paraArray();
         if ($impostosV2 !== null && $impostosV2 !== []) {
             $dados['impostosV2'] = self::numerificar($impostosV2);
+        }
+
+        if ($item->dis !== []) {
+            $dis = [];
+            foreach ($item->dis as $di) {
+                $entry = [
+                    'numeroDi' => $di->numeroDi,
+                    'dataRegistro' => $di->dataRegistro,
+                    'localDesembaraco' => $di->localDesembaraco,
+                    'ufDesembaraco' => strtoupper($di->ufDesembaraco),
+                    'dataDesembaraco' => $di->dataDesembaraco,
+                    'viaTransporte' => $di->viaTransporte,
+                    'formaIntermediacao' => $di->formaIntermediacao,
+                    'codigoExportador' => $di->codigoExportador,
+                ];
+                if ($di->valorAfrmm !== null) {
+                    $entry['valorAfrmm'] = self::num($di->valorAfrmm);
+                }
+                if ($di->cnpjAdquirente !== null) {
+                    $entry['cnpjAdquirente'] = $di->cnpjAdquirente;
+                }
+                if ($di->cnpjProdutor !== null) {
+                    $entry['cnpjProdutor'] = $di->cnpjProdutor;
+                }
+                if ($di->adicoes !== []) {
+                    $adicoes = [];
+                    foreach ($di->adicoes as $adicao) {
+                        $ad = [
+                            'numeroAdicao' => $adicao->numeroAdicao,
+                            'sequencial' => $adicao->sequencial,
+                            'codigoFabricante' => $adicao->codigoFabricante,
+                        ];
+                        if ($adicao->valorDescontoDi !== null) {
+                            $ad['valorDescontoDi'] = self::num($adicao->valorDescontoDi);
+                        }
+                        if ($adicao->numeroDrawback !== null) {
+                            $ad['numeroDrawback'] = $adicao->numeroDrawback;
+                        }
+                        $adicoes[] = $ad;
+                    }
+                    $entry['adicoes'] = $adicoes;
+                }
+                $dis[] = $entry;
+            }
+            $dados['dis'] = $dis;
         }
 
         return $dados;

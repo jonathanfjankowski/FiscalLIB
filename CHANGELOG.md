@@ -6,6 +6,26 @@ quando a rejeição técnica é ativada.
 
 ## [Unreleased]
 
+### Adicionado
+- **Grupo `card` no pagamento (NF-e/NFC-e)** — novo VO `DadosCartao`
+  (`tipoIntegracao`, `bandeira`, `autorizacao`, `cnpjCredenciadora` opcional),
+  suportado em `Pagamento`, `NfeBuilder::pagamento(..., ?DadosCartao $cartao)` e
+  serializado em `MapeadorDocumento`.
+- **Contingência offline NFC-e (`tpEmis 9`)** — `NfeDocumento::$contingenciaOffline`,
+  `NfceBuilder::contingenciaOffline(bool $ativa = true)` (libera séries `900–999`
+  quando offline) e envio de `contingenciaOffline: true` em `MapeadorDocumento`.
+- **ICMS Partilha (`ICMSPart` — CST 10)** — `NfeTaxContext::partilhaSt(percentualBcOperacao, ufSt)`,
+  suporte em `TaxEngine` (ST própria opcional quando `ICMSPart`, espelhando
+  `ValidadorImpostosV2` da FiscalAPI) e campos em `IcmsResultado`.
+- **Importação (`DI` + `II`)** — novos modelos `DeclaracaoImportacao`,
+  `AdicaoImportacao`, `IiEntrada` e `IiResultado`; `ItemFiscal::$dis`,
+  `NfeTaxContext::ii()`, `NfeTaxResultado::$ii` e serialização completa (`dis` e
+  `impostosV2.ii`) em `MapeadorDocumento`.
+- **Endpoints de operação/gestão no adaptador FiscalAPI** —
+  `EmissorFiscalApi::listarEventos()`, `EmissorFiscalApi::previewPdf()`,
+  `GestaoFiscalApi::desativarCertificado()`, `GestaoFiscalApi::ativarCertificado()`
+  e `GestaoFiscalApi::reenviarWebhook()`.
+
 ### Corrigido
 - **infCpl (informações complementares) nunca chegava à nota** — o
   `MapeadorDocumento::paraEmissaoRequest()` escrevia

@@ -329,9 +329,9 @@ final class NfeBuilderTest extends TestCase
         );
 
         $documento = $this->documentoBase()->ibsCbsDispensavel();
-        $documento->addItem($this->item(tributos: $semIbsCbs))->build();
+        $doc = $documento->addItem($this->item(tributos: $semIbsCbs))->build();
 
-        self::assertTrue(true); // build sem exceção
+        self::assertSame('100.00', $doc->totais->valorProdutos);
     }
 
     public function testItemRegimeNormalComIbsCbsPassa(): void

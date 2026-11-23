@@ -124,6 +124,23 @@ final class ClienteHttp
         return [(string) $resposta->getBody(), $resposta->getHeaderLine('Content-Type') ?: 'application/pdf'];
     }
 
+    /**
+     * POST com payload JSON e retorno binário (ex.: preview-pdf).
+     *
+     * @param array<string,mixed> $corpoJson
+     * @return array{0:string,1:string}
+     */
+    public function postBinario(string $caminho, array $corpoJson): array
+    {
+        $json = self::codificarJson($corpoJson);
+        $requisicao = $this->novaRequisicao('POST', $caminho, $json, null)
+            ->withHeader('Content-Type', 'application/json')
+            ->withHeader('Accept', 'application/pdf, application/json');
+        $resposta = $this->enviarComRetry($requisicao);
+
+        return [(string) $resposta->getBody(), $resposta->getHeaderLine('Content-Type') ?: 'application/pdf'];
+    }
+
     // ------------------------------------------------------------------ core
 
     /**
@@ -210,7 +227,7 @@ final class ClienteHttp
             }
         }
 
-        throw $ultimaExcecao ?? ApiIndisponivelException::rede('Falha desconhecida.'); // @codeCoverageIgnore
+        throw $ultimaExcecao; // @codeCoverageIgnore
     }
 
     private function excecaoParaStatus(ResponseInterface $resposta): ApiHttpException

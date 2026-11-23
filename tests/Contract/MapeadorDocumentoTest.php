@@ -384,4 +384,72 @@ final class MapeadorDocumentoTest extends TestCase
         self::assertSame(82, $payload['totais']['valorNota']);
         self::assertSame(18, $payload['totais']['valorDesonerado']);
     }
+
+    public function testCartaoContingenciaOfflineIcmsPartEDiIiNoJson(): void
+    {
+        $engine = new \FiscalLib\Tax\TaxEngine();
+        $tributos = $engine->calcularNfe(
+            \FiscalLib\Tax\Contextos\NfeTaxContext::make()
+                ->valores(quantidade: 1, valorUnitario: 100)
+                ->cfop('6102')
+                ->icms(\FiscalLib\Common\Enums\OrigemMercadoria::EstrangeiraImportacaoDireta, \FiscalLib\Common\Enums\CstIcms::TributadaComCobrancaIcmsPorSt, aliquota: 12)
+                ->partilhaSt(percentualBcOperacao: '50.0000', ufSt: 'SP')
+                ->ii(new \FiscalLib\Tax\Contextos\IiEntrada(baseCalculo: 100, valorDespesasAduaneiras: 10, valorIi: 15, valorIof: 2))
+                ->ibsCbs(\FiscalLib\Tax\Contextos\IbsCbsEntrada::criar('000', '000001', aliquotaIbsEstadual: '0.1', aliquotaIbsMunicipal: '0', aliquotaCbs: '0.9'))
+        );
+
+        $di = new \FiscalLib\Documento\DeclaracaoImportacao(
+            numeroDi: '2600000001',
+            dataRegistro: '2026-10-01T00:00:00-03:00',
+            localDesembaraco: 'SANTOS',
+            ufDesembaraco: 'SP',
+            dataDesembaraco: '2026-10-02T00:00:00-03:00',
+            viaTransporte: 1,
+            formaIntermediacao: 1,
+            codigoExportador: 'EXP001',
+            valorAfrmm: '5.50',
+            adicoes: [
+                new \FiscalLib\Documento\AdicaoImportacao(1, 1, 'FAB001', valorDescontoDi: '1.00', numeroDrawback: '12345'),
+            ],
+        );
+
+        $nfce = \FiscalLib\Nfce\NfceBuilder::nfce()
+            ->ambiente(Ambiente::Homologacao)
+            ->serie(900)
+            ->contingenciaOffline(true)
+            ->naturezaOperacao('Venda balcão offline')
+            ->addItem(new ItemFiscal(
+                codigo: 'IMP1',
+                descricao: 'Item importado',
+                quantidade: '1.0000',
+                valorUnitario: '100.00',
+                valorTotal: '100.00',
+                tributos: $tributos,
+                ncm: '12345678',
+                cfop: '5102',
+                dis: [$di],
+            ))
+            ->pagamento(
+                FormaPagamento::CartaoCredito,
+                100,
+                new \FiscalLib\Documento\DadosCartao('1', '01', 'AUT98765', '11444777000161'),
+            )
+            ->build();
+
+        $payload = json_decode((string) json_encode($this->mapeador->paraEmissaoRequest($nfce)), true);
+
+        self::assertTrue($payload['contingenciaOffline']);
+        self::assertSame(900, $payload['serie']);
+        self::assertSame('1', $payload['pagamento'][0]['tipoIntegracao']);
+        self::assertSame('01', $payload['pagamento'][0]['bandeira']);
+        self::assertSame('AUT98765', $payload['pagamento'][0]['autorizacao']);
+        self::assertSame('11444777000161', $payload['pagamento'][0]['cnpjCredenciadora']);
+        self::assertSame(50, $payload['itens'][0]['impostosV2']['icms']['percentualBcOperacao']);
+        self::assertSame('SP', $payload['itens'][0]['impostosV2']['icms']['ufSt']);
+        self::assertSame(15, $payload['itens'][0]['impostosV2']['ii']['valorIi']);
+        self::assertSame(2, $payload['itens'][0]['impostosV2']['ii']['valorIof']);
+        self::assertSame('2600000001', $payload['itens'][0]['dis'][0]['numeroDi']);
+        self::assertSame(5.5, $payload['itens'][0]['dis'][0]['valorAfrmm']);
+        self::assertSame('FAB001', $payload['itens'][0]['dis'][0]['adicoes'][0]['codigoFabricante']);
+    }
 }

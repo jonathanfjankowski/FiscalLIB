@@ -84,6 +84,13 @@ final class NfeTaxContext
     public ?IbsCbsEntrada $ibsCbs = null;
     public ?IsEntrada $is = null;
 
+    // ICMSPart (CST 10 interestadual)
+    public ?string $percentualBcOperacao = null;
+    public ?string $ufSt = null;
+
+    // Imposto de Importação (grupo II)
+    public ?IiEntrada $ii = null;
+
     private function __construct()
     {
     }
@@ -256,6 +263,23 @@ final class NfeTaxContext
     public function is(IsEntrada $entrada): self
     {
         $this->is = $entrada;
+
+        return $this;
+    }
+
+    /** Partilha de ICMS-ST na operação interestadual (ICMSPart — CST 10). */
+    public function partilhaSt(string|int|float $percentualBcOperacao, string $ufSt): self
+    {
+        $this->percentualBcOperacao = Matematica::normalizar($percentualBcOperacao);
+        $this->ufSt = strtoupper(trim($ufSt));
+
+        return $this;
+    }
+
+    /** Imposto de Importação (grupo II — item importado). */
+    public function ii(IiEntrada $entrada): self
+    {
+        $this->ii = $entrada;
 
         return $this;
     }

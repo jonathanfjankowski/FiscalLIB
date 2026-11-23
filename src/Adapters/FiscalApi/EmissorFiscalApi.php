@@ -164,6 +164,31 @@ final class EmissorFiscalApi implements EmissorInterface
         return $conteudo;
     }
 
+    /**
+     * Lista os eventos fiscais (cancelamento, CC-e, inutilização) associados ao documento.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function listarEventos(string $documentoId): array
+    {
+        return $this->http->get("/v1/documentos-fiscais/{$this->idSeguro($documentoId)}/eventos");
+    }
+
+    /**
+     * Pré-visualização de DANFE/DANFCe em PDF sem transmitir à SEFAZ.
+     */
+    public function previewPdf(NfeDocumento $documento): ArquivoPdf
+    {
+        $tipo = $documento->modelo === ModeloDocumento::Nfce ? 'NFCE' : 'NFE';
+        $payload = $this->mapeadorDocumento->paraEmissaoRequest($documento);
+        [$conteudo, $contentType] = $this->http->postBinario(
+            '/v1/documentos-fiscais/preview-pdf',
+            ['tipo' => $tipo, 'payload' => $payload],
+        );
+
+        return new ArquivoPdf($conteudo, false, $contentType);
+    }
+
     public function substituir(
         string $documentoId,
         NfseDocumento $substituta,

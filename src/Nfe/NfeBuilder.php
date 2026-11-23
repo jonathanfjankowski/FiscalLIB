@@ -16,6 +16,7 @@ use FiscalLib\Common\Matematica;
 use FiscalLib\Common\ValueObjects\CodigoCfop;
 use FiscalLib\Common\ValueObjects\Cnpj;
 use FiscalLib\Common\ValueObjects\ChaveAcesso;
+use FiscalLib\Documento\DadosCartao;
 use FiscalLib\Documento\Destinatario;
 use FiscalLib\Documento\Emitente;
 use FiscalLib\Documento\ItemFiscal;
@@ -86,6 +87,7 @@ class NfeBuilder
     protected ?string $valorDescontoDocumento = null;
     protected ?string $informacoesComplementares = null;
     protected ?TransporteDocumento $transporte = null;
+    protected bool $contingenciaOffline = false;
 
     public static function make(): static
     {
@@ -188,9 +190,9 @@ class NfeBuilder
         return $this;
     }
 
-    public function pagamento(FormaPagamento $forma, string|int|float $valor): static
+    public function pagamento(FormaPagamento $forma, string|int|float $valor, ?DadosCartao $cartao = null): static
     {
-        $this->pagamentos[] = new Pagamento($forma, Matematica::escalar($valor, 2));
+        $this->pagamentos[] = new Pagamento($forma, Matematica::escalar($valor, 2), $cartao);
 
         return $this;
     }
@@ -374,6 +376,7 @@ class NfeBuilder
             indicadorIntermediador: $this->indicadorIntermediador,
             cnpjIntermediador: $this->cnpjIntermediador,
             transporte: $this->transporte,
+            contingenciaOffline: $this->contingenciaOffline,
         );
     }
 

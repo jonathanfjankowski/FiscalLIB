@@ -32,6 +32,14 @@ final class NfceBuilder extends NfeBuilder
         return new self();
     }
 
+    /** Emissão de NFC-e em contingência offline (tpEmis 9 — libera séries 900–999). */
+    public function contingenciaOffline(bool $ativa = true): static
+    {
+        $this->contingenciaOffline = $ativa;
+
+        return $this;
+    }
+
     public function finalidade(FinalidadeNfe $finalidade): static
     {
         if ($finalidade !== FinalidadeNfe::Normal) {
@@ -59,7 +67,7 @@ final class NfceBuilder extends NfeBuilder
     {
         $erros = [];
 
-        if ($this->serie > 899) {
+        if (! $this->contingenciaOffline && $this->serie > 899) {
             $erros['serie'][] = 'NFC-e: série 900–999 é reservada para contingência offline (R-NFC003).';
         }
 

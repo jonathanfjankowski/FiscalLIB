@@ -67,6 +67,18 @@ final class GestaoFiscalApi
         return $this->http->get('/v1/certificados');
     }
 
+    /** Desativa (soft-delete) um certificado do tenant. */
+    public function desativarCertificado(string $id): void
+    {
+        $this->http->delete('/v1/certificados/' . rawurlencode($id));
+    }
+
+    /** Reativa um certificado anterior do tenant (desativando os demais). */
+    public function ativarCertificado(string $id): array
+    {
+        return $this->http->postSemIdempotencia('/v1/certificados/' . rawurlencode($id) . '/ativar', []);
+    }
+
     // -------------------------------------------------------------- api keys
 
     public function criarApiKey(Ambiente $ambiente, ?string $descricao = null): array
@@ -112,6 +124,12 @@ final class GestaoFiscalApi
             'webhookUrl' => $webhookUrl,
             'webhookSecret' => $webhookSecret,
         ], static fn ($v) => $v !== null));
+    }
+
+    /** Reenvia manualmente uma entrega de webhook em falha. */
+    public function reenviarWebhook(string $entregaId): array
+    {
+        return $this->http->postSemIdempotencia('/v1/webhooks/' . rawurlencode($entregaId) . '/reenviar', []);
     }
 
     // --------------------------------------------------------- status serviço

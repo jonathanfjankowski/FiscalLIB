@@ -19,6 +19,7 @@ final class NfeTaxResultado
         public readonly ?ImpostoTrioResultado $cofins = null,
         public readonly ?IbsCbsResultado $ibsCbs = null,
         public readonly ?IsResultado $is = null,
+        public readonly ?IiResultado $ii = null,
     ) {
     }
 
@@ -58,5 +59,11 @@ final class NfeTaxResultado
     public function totalDesonerado(): string
     {
         return $this->icms->valorDesonerado ?? '0.00';
+    }
+
+    /** vII do item (Imposto de Importação). */
+    public function totalIi(): string
+    {
+        return $this->ii->valorIi ?? '0.00';
     }
 }

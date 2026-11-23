@@ -20,6 +20,7 @@ use FiscalLib\Tax\Resultados\DifalResultado;
 use FiscalLib\Tax\Resultados\IbsCbsResultado;
 use FiscalLib\Tax\Resultados\IcmsResultado;
 use FiscalLib\Tax\Resultados\IcmsStResultado;
+use FiscalLib\Tax\Resultados\IiResultado;
 use FiscalLib\Tax\Resultados\ImpostoTrioResultado;
 use FiscalLib\Tax\Resultados\IsResultado;
 use FiscalLib\Tax\Resultados\NfeTaxResultado;
@@ -46,6 +47,7 @@ final class TaxEngine implements TaxEngineInterface
             cofins: $this->calcularPisCofins($ctx->cstCofins, $ctx->aliquotaCofins, $ctx),
             ibsCbs: $ctx->ibsCbs === null ? null : $this->calcularIbsCbs($ctx),
             is: $ctx->is === null ? null : $this->calcularIs($ctx),
+            ii: $ctx->ii === null ? null : $this->calcularIi($ctx),
         );
     }
 
@@ -162,6 +164,23 @@ final class TaxEngine implements TaxEngineInterface
         if ($ctx->is !== null) {
             $this->exigirPercentual('aliquotaIs', $ctx->is->aliquota);
             $this->exigirNaoNegativo('baseCalculoOverride', $ctx->is->baseCalculoOverride);
+        }
+        if ($ctx->percentualBcOperacao !== null || $ctx->ufSt !== null) {
+            $this->exigirPercentual('percentualBcOperacao', $ctx->percentualBcOperacao);
+            if ($ctx->cst !== CstIcms::TributadaComCobrancaIcmsPorSt) {
+                throw TaxInconsistencyException::combinacaoNaoSuportada(
+                    'partilhaSt (ICMSPart: percentualBcOperacao/ufSt) só se aplica a CST 10.'
+                );
+            }
+            if ($ctx->ufSt !== null && preg_match('/^[A-Z]{2}$/', $ctx->ufSt) !== 1) {
+                throw new TaxInconsistencyException("ufSt inválida: '{$ctx->ufSt}' (use sigla de 2 letras).");
+            }
+        }
+        if ($ctx->ii !== null) {
+            $this->exigirNaoNegativo('ii.baseCalculo', $ctx->ii->baseCalculo);
+            $this->exigirNaoNegativo('ii.valorDespesasAduaneiras', $ctx->ii->valorDespesasAduaneiras);
+            $this->exigirNaoNegativo('ii.valorIi', $ctx->ii->valorIi);
+            $this->exigirNaoNegativo('ii.valorIof', $ctx->ii->valorIof);
         }
     }
 
@@ -280,8 +299,13 @@ final class TaxEngine implements TaxEngineInterface
                 if ($ctx->percentualReducaoBc !== null) {
                     throw TaxInconsistencyException::combinacaoNaoSuportada('CST 10 não admite redução de BC — use CST 70.');
                 }
+                // ICMSPart (percentualBcOperacao/ufSt): ST própria é opcional (espelha ValidadorImpostosV2).
+                $ehIcmsPart = $ctx->percentualBcOperacao !== null || $ctx->ufSt !== null;
+                $st = $ehIcmsPart && $ctx->modBcSt === null
+                    ? null
+                    : $this->stPropria($ctx, $basePropria);
 
-                return $this->icmsTributado($ctx, $basePropria, $this->stPropria($ctx, $basePropria));
+                return $this->icmsTributado($ctx, $basePropria, $st);
 
             case CstIcms::ComReducaoDeBaseDeCalculo:
                 if ($ctx->percentualReducaoBc === null) {
@@ -507,6 +531,21 @@ final class TaxEngine implements TaxEngineInterface
             valorFcp: $ctx->aliquotaFcp === null ? null : Matematica::percentualDe($base, $ctx->aliquotaFcp),
             st: $st,
             difal: $this->difalSeAplicavel($ctx, $base),
+            percentualBcOperacao: $this->pct($ctx->percentualBcOperacao),
+            ufSt: $ctx->ufSt,
+        );
+    }
+
+    private function calcularIi(NfeTaxContext $ctx): IiResultado
+    {
+        $ii = $ctx->ii;
+        \assert($ii !== null);
+
+        return new IiResultado(
+            baseCalculo: $ii->baseCalculo,
+            valorDespesasAduaneiras: $ii->valorDespesasAduaneiras,
+            valorIi: $ii->valorIi,
+            valorIof: $ii->valorIof,
         );
     }
 

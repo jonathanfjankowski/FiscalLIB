@@ -12,6 +12,9 @@ use FiscalLib\Tax\Resultados\NfeTaxResultado;
  */
 final class ItemFiscal
 {
+    /**
+     * @param list<DeclaracaoImportacao> $dis
+     */
     public function __construct(
         public readonly string $codigo,
         public readonly string $descricao,
@@ -25,6 +28,7 @@ final class ItemFiscal
         public readonly ?string $gtin = null,      // default "SEM GTIN"
         public readonly ?string $unidade = null,   // default "UN"
         public readonly string $valorDesconto = '0.00',
+        public readonly array $dis = [],
     ) {
     }
 }

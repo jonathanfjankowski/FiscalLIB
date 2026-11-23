@@ -37,6 +37,9 @@ final class IcmsResultado
         public readonly ?string $codigoBeneficioFiscal = null,
         public readonly ?IcmsStResultado $st = null,
         public readonly ?DifalResultado $difal = null,
+        /** ICMSPart (CST 10 interestadual) */
+        public readonly ?string $percentualBcOperacao = null,
+        public readonly ?string $ufSt = null,
     ) {
     }
 

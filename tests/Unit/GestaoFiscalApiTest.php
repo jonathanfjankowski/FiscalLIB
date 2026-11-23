@@ -81,6 +81,27 @@ final class GestaoFiscalApiTest extends TestCase
         self::assertSame('2027-01-01', $lista[0]['validoAte']);
     }
 
+    public function testDesativarAtivarCertificadoEReenviarWebhook(): void
+    {
+        $this->fake->enviarNova(new Response(204));
+        $this->gestao->desativarCertificado('cert-1');
+
+        $this->fake->enviarNova($this->respostaJson('{"id":"cert-1","ativo":true}'));
+        $ativado = $this->gestao->ativarCertificado('cert-1');
+
+        $this->fake->enviarNova($this->respostaJson('{"id":"wh-1","status":"PENDENTE"}'));
+        $reenviado = $this->gestao->reenviarWebhook('wh-1');
+
+        self::assertSame('DELETE', $this->fake->requisicoes[0]->getMethod());
+        self::assertSame('http://api.test/v1/certificados/cert-1', (string) $this->fake->requisicoes[0]->getUri());
+        self::assertSame('POST', $this->fake->requisicoes[1]->getMethod());
+        self::assertSame('http://api.test/v1/certificados/cert-1/ativar', (string) $this->fake->requisicoes[1]->getUri());
+        self::assertTrue($ativado['ativo']);
+        self::assertSame('POST', $this->fake->requisicoes[2]->getMethod());
+        self::assertSame('http://api.test/v1/webhooks/wh-1/reenviar', (string) $this->fake->requisicoes[2]->getUri());
+        self::assertSame('PENDENTE', $reenviado['status']);
+    }
+
     // ---------------------------------------------------------------- api keys
 
     public function testCriarApiKeyEnviaAmbienteEDescricao(): void

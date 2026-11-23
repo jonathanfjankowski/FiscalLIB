@@ -14,6 +14,7 @@ final class Pagamento
     public function __construct(
         public readonly FormaPagamento $forma,
         public readonly string $valor,
+        public readonly ?DadosCartao $cartao = null,
     ) {
     }
 

@@ -42,6 +42,7 @@ final class NfeDocumento
         public readonly ?IndicadorIntermediador $indicadorIntermediador = null, // NT 2020.006 (indIntermed) — só NF-e (55)
         public readonly ?string $cnpjIntermediador = null,    // obrigatório quando indicadorIntermediador = 1
         public readonly ?TransporteDocumento $transporte = null, // grupo transp (v2 §7)
+        public readonly bool $contingenciaOffline = false, // NFC-e offline (tpEmis 9)
     ) {
     }
 }
