@@ -731,7 +731,12 @@ final class TaxEngine implements TaxEngineInterface
 
         if ($cst->admiteAliquotaOpcional()) {
             if ($aliquota === null) {
-                return new ImpostoTrioResultado(cst: $cst->value);
+                return new ImpostoTrioResultado(
+                    cst: $cst->value,
+                    baseCalculo: '0.00',
+                    aliquota: '0.0000',
+                    valor: '0.00',
+                );
             }
 
             return new ImpostoTrioResultado(

@@ -315,7 +315,7 @@ final class TaxEngineTest extends TestCase
     }
     public function testPisCofins49OutrasSaidas(): void
     {
-        // 49 = outras operações de saída: alíquota facultativa (sem alíquota = sem valores).
+        // 49 = outras operações de saída (PISOutr): sem alíquota, emite base/alíquota/valor zerados (schema SEFAZ).
         $r = $this->engine->calcularNfe(
             $this->contexto()->icms(OrigemMercadoria::Nacional, CstIcms::TributadaIntegralmente, aliquota: 18)
                 ->pis(CstPisCofins::OutrasOperacoesSaida)
@@ -323,7 +323,9 @@ final class TaxEngineTest extends TestCase
         );
 
         self::assertSame('49', $r->pis->cst);
-        self::assertNull($r->pis->valor);
+        self::assertSame('0.00', $r->pis->baseCalculo);
+        self::assertSame('0.0000', $r->pis->aliquota);
+        self::assertSame('0.00', $r->pis->valor);
         self::assertSame('49', $r->cofins->cst);
         self::assertSame('30.00', $r->cofins->valor);
     }
